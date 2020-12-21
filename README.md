@@ -1,1 +1,1 @@
-# shaclc-generator-stream
+# shaclc-writer
