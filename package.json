@@ -1,0 +1,27 @@
+{
+  "name": "shaclc-generator-stream",
+  "version": "1.0.0",
+  "description": "Converts a quad stream to a text stream in shacl compact syntax",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "prepublish": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/jeswr/shaclc-generator-stream.git"
+  },
+  "keywords": [
+    "SHACLC",
+    "SHACL-compact-syntax",
+    "generator",
+    "stream"
+  ],
+  "author": "Jesse Wright <jesse.wright@anu.edu.au>",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/jeswr/shaclc-generator-stream/issues"
+  },
+  "homepage": "https://github.com/jeswr/shaclc-generator-stream#readme"
+}
