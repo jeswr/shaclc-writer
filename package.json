@@ -5,9 +5,9 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "lint": "eslint src perf test spec",
-    "build": "tsc",
-    "prepublish": "tsc",
+    "lint": "eslint",
+    "build": "tsc lib/*.ts",
+    "prepublish": "build",
     "test": "jest --coverage"
   },
   "repository": {
@@ -34,6 +34,7 @@
     "eslint-config-airbnb-base": "^14.2.1",
     "eslint-plugin-import": "^2.22.1",
     "jest": "^26.6.3",
+    "pre-commit": "^1.2.2",
     "ts-jest": "^26.4.4",
     "typescript": "^4.1.3"
   },
