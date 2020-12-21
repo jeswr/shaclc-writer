@@ -6,7 +6,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "lint": "eslint",
-    "build": "tsc lib/*.ts",
+    "build": "tsc",
     "prepublish": "build",
     "test": "jest --coverage"
   },
@@ -28,6 +28,7 @@
   "homepage": "https://github.com/jeswr/shaclc-writer#readme",
   "devDependencies": {
     "@types/jest": "^26.0.19",
+    "@types/n3": "^1.4.4",
     "@typescript-eslint/eslint-plugin": "^4.10.0",
     "@typescript-eslint/parser": "^4.10.0",
     "eslint": "^7.16.0",
@@ -42,5 +43,8 @@
     "lint",
     "build",
     "test"
-  ]
+  ],
+  "dependencies": {
+    "n3": "^1.6.4"
+  }
 }

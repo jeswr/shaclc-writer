@@ -1,7 +1,7 @@
 /* eslint-disable no-undef */
 import { Parser, NamedNode } from 'n3'
 import fs, { readFileSync } from 'fs'
-import { SHACLCWriter, MyWriter, MyStore } from '../lib/ShaclcGenerator-2'
+import { SHACLCWriter, MyWriter, MyStore } from '../ShaclcGenerator'
 import pathLib from 'path'
 
 async function getText(path: string): Promise<string> {
