@@ -5,7 +5,7 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "scripts": {
-    "lint": "eslint",
+    "lint": "eslint lib/* --ext .ts",
     "build": "tsc",
     "prepublish": "build",
     "test": "jest --coverage"
@@ -45,6 +45,7 @@
     "test"
   ],
   "dependencies": {
-    "n3": "^1.6.4"
+    "n3": "^1.6.4",
+    "rdf-string-ttl": "^1.1.0"
   }
 }

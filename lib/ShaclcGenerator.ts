@@ -1,12 +1,10 @@
-/* eslint-disable camelcase */
-/* eslint-disable space-before-function-paren */
 /**
  * Generates a SHACLC file stream from a quad stream, since SHACLC is
  * lossy with respect to N3, a stream of quads that could not be
  * written is also output.
  */
 import {
-  NamedNode, OTerm, Term, Quad, Quad_Subject, Quad_Object,
+  NamedNode, Term, Quad, Quad_Object,
 } from 'n3';
 import { termToString } from 'rdf-string-ttl';
 import {
@@ -14,17 +12,26 @@ import {
 } from './ontologies';
 import Store from './volatile-store';
 import Writer from './writer';
+import { getShaclName } from './utils';
+import propertyParam from './property-param ';
+import basePrefixes from './base-prefixes';
+import nodeParam from './node-param';
+
+type Property = { name: string, type: 'pred' | 'not', object: Quad_Object }
 
 export default class SHACLCWriter {
   private prefixRev: { [namespace: string]: string } = {};
 
   constructor(
+    // eslint-disable-next-line no-unused-vars
     private store: Store,
+    // eslint-disable-next-line no-unused-vars
     public writer: Writer,
     private prefixes: { [prefix: string]: string } = {},
+    // eslint-disable-next-line no-unused-vars
     private base: NamedNode | undefined = undefined,
   ) {
-    for (const key in prefixes) {
+    for (const key of Object.keys(prefixes)) {
       this.prefixRev[prefixes[key]] = key;
     }
     this.write();
@@ -72,7 +79,8 @@ export default class SHACLCWriter {
   private termToString(term: Term) {
     // TODO: Make sure this does not introduce any errors
     try {
-      return this.getShaclName(term);
+      return getShaclName(term);
+      // eslint-disable-next-line no-empty
     } catch (e) { }
     if (term.termType === 'NamedNode') {
       const namespace = /^[^]*[#/]/.exec(term.value)?.[0];
@@ -81,7 +89,10 @@ export default class SHACLCWriter {
       }
       return termToString(term);
     } if (term.termType === 'Literal') {
-      if (term.datatypeString === 'http://www.w3.org/2001/XMLSchema#integer' || term.datatypeString === 'http://www.w3.org/2001/XMLSchema#boolean') {
+      if (
+        term.datatypeString === 'http://www.w3.org/2001/XMLSchema#integer'
+        || term.datatypeString === 'http://www.w3.org/2001/XMLSchema#boolean'
+      ) {
         return term.value;
       }
       // TODO: Fix escaping issue
@@ -95,8 +106,12 @@ export default class SHACLCWriter {
     /**
      * Get every nodeshape declared at the top level
      */
-    for (const subject of this.store.getSubjectsOnce(new NamedNode(rdf.type), new NamedNode(sh.NodeShape), null)) {
-      if (this.store.getQuadsOnce(subject, new NamedNode(rdf.type), new NamedNode(rdfs.Class), null).length > 0) {
+    for (const subject of this.store.getSubjectsOnce(
+      new NamedNode(rdf.type), new NamedNode(sh.NodeShape), null,
+    )) {
+      if (this.store.getQuadsOnce(
+        subject, new NamedNode(rdf.type), new NamedNode(rdfs.Class), null,
+      ).length > 0) {
         this.writer.add('shapeClass ');
       } else {
         this.writer.add('shape ');
@@ -115,10 +130,12 @@ export default class SHACLCWriter {
     }
   }
 
-  private getSingleProperty(quad: Quad, allowedPredicates: Record<string, boolean>): { name: string, type: 'pred' | 'not', object: Quad_Object } | void {
+  private getSingleProperty(quad: Quad, allowedPredicates: Record<string, boolean>):
+    Property | undefined {
+    let tempQuad = quad;
     let examining = [quad];
     try {
-      let name = this.getShaclName(quad.predicate);
+      let name = getShaclName(quad.predicate);
       let type: 'pred' | 'not' = 'pred';
       if (name === 'not') {
         const quads = this.store.getQuadsOnce(quad.object, null, null, null);
@@ -127,8 +144,8 @@ export default class SHACLCWriter {
         if (quads.length !== 1) {
           throw new Error('Can only handle having one predicate of \'not\'');
         }
-        quad = quads[0];
-        name = this.getShaclName(quad.predicate);
+        [tempQuad] = quads;
+        name = getShaclName(tempQuad.predicate);
         type = 'not';
       }
       if (!(name in allowedPredicates)) {
@@ -138,21 +155,11 @@ export default class SHACLCWriter {
     } catch (e) {
       this.store.addQuads(examining);
     }
+    return undefined;
   }
 
-  // private singleLayerProperties(term: Term, allowedPredicates: Record<string, boolean>): Record<string, { not: Term[], pred: Term[] }> {
-  //   const map: Record<string, { not: Term[], pred: Term[] }> = {}
-  //   for (const quad of this.store.getQuadsOnce(term, null, null, null)) {
-  //     const data = this.getSingleProperty(quad, allowedPredicates)
-  //     if (data) {
-  //       map[data.name] ??= { not: [], pred: [] }
-  //       map[data.name][data.type] = [quad.object]
-  //     }
-  //   }
-  //   return map
-  // }
-
-  private singleLayerPropertiesList(term: Term, allowedPredicates: Record<string, boolean>): { name: string, type: string, object: Quad_Object }[] {
+  private singleLayerPropertiesList(term: Term, allowedPredicates: Record<string, boolean>):
+    Property[] {
     const result = [];
     for (const quad of this.store.getQuadsOnce(term, null, null, null)) {
       const property = this.getSingleProperty(quad, allowedPredicates);
@@ -163,19 +170,21 @@ export default class SHACLCWriter {
     return result;
   }
 
-  private expectOneProperty(term: Term, allowedPredicates: Record<string, boolean>): { name: string, type: string, object: Quad_Object } | void {
+  private expectOneProperty(term: Term, allowedPredicates: Record<string, boolean>):
+    Property | undefined {
     const quads = this.store.getQuadsOnce(term, null, null, null);
     if (quads.length === 1) {
       const data = this.getSingleProperty(quads[0], allowedPredicates);
       if (data) { return data; }
     }
     this.store.addQuads(quads);
+    return undefined;
   }
 
   private orProperties(term: Term, allowedPredicates: Record<string, boolean>) {
-    const orProperties: { name: string, type: string, object: Quad_Object }[][] = [];
+    const orProperties: Property[][] = [];
     for (const quad of this.store.getQuadsOnce(term, new NamedNode(sh.or), null, null)) {
-      const statement: { name: string, type: string, object: Quad_Object }[] = [];
+      const statement: Property[] = [];
       for (const item of this.getList(quad.object)) {
         const property = this.expectOneProperty(item, allowedPredicates);
         if (!property) {
@@ -195,24 +204,14 @@ export default class SHACLCWriter {
    */
   private getList(term: Term): Term[] {
     // TODO: Fix gross type casting
-    let _term: Term = term;
+    let termTemp: Term = term;
     const list: Term[] = [];
     // TODO: Handle poorly formed RDF lists
-    while (!_term.equals(new NamedNode(rdf.nil))) {
-      list.push(this.singleObject(_term, new NamedNode(rdf.first), true) as Term);
-      _term = this.singleObject(_term, new NamedNode(rdf.rest), true) as Term;
+    while (!term.equals(new NamedNode(rdf.nil))) {
+      list.push(this.singleObject(termTemp, new NamedNode(rdf.first), true) as Term);
+      termTemp = this.singleObject(termTemp, new NamedNode(rdf.rest), true) as Term;
     }
     return list;
-  }
-
-  /**
-   * Get the frame of an IRI that we expect to be in the SHACL namespace
-   */
-  private getShaclName(term: Term) {
-    if (term.termType !== 'NamedNode' || !term.value.startsWith(sh._)) {
-      throw new Error(`Term ${term.value} is not part of the SHACL namespace`);
-    }
-    return term.value.slice(27);
   }
 
   private writeIriLiteralOrArray(object: Quad_Object) {
@@ -241,11 +240,13 @@ export default class SHACLCWriter {
    */
   // TODO: FIX private singleObject(subject: Term, predicate: Term, strict: true): Term;
   // TODO: Put deletions in here?
-  private singleObject(subject: Term | null, predicate: Term | null, strict: boolean = false): Term | undefined {
+  private singleObject(subject: Term | null, predicate: Term | null, strict: boolean = false):
+    Term | undefined {
     return this.singleQuad(subject, predicate, strict)?.object;
   }
 
-  private singleQuad(subject: Term | null, predicate: Term | null, strict: boolean = false): Quad | undefined {
+  private singleQuad(subject: Term | null, predicate: Term | null, strict: boolean = false):
+    Quad | undefined {
     const objects = this.store.getQuadsOnce(subject, predicate, null, null);
     if (objects.length > 1) {
       this.store.addQuads(objects);
@@ -258,14 +259,14 @@ export default class SHACLCWriter {
     return objects.length === 1 ? objects[0] : undefined;
   }
 
-  private writeAssigment({ name, type, object }: { name: string, type: string, object: Quad_Object }) {
+  private writeAssigment({ name, type, object }: Property) {
     if (type === 'not') { this.writer.add('!'); }
     this.writer.add(name);
     this.writer.add('=');
     this.writeIriLiteralOrArray(object);
   }
 
-  private writeAtom({ name, type, object }: { name: string, type: string, object: Quad_Object }) {
+  private writeAtom({ name, type, object }: Property) {
     if (type === 'not') { this.writer.add('!'); }
     switch (name) {
       case 'node': {
@@ -279,7 +280,7 @@ export default class SHACLCWriter {
         return;
       }
       case 'nodeKind': {
-        this.writer.add(this.getShaclName(object));
+        this.writer.add(getShaclName(object));
         return;
       }
       case 'class':
@@ -294,9 +295,10 @@ export default class SHACLCWriter {
     }
   }
 
-  private writeAssigments(assignments: { name: string, type: string, object: Quad_Object }[], divider = ' ', first = true, shortcuts) {
+  private writeAssigments(assignments: Property[], divider = ' ', first = true, shortcuts: boolean) {
     for (const assignment of assignments) {
       if (first) {
+        // eslint-disable-next-line no-param-reassign
         first = false;
       } else {
         this.writer.add(divider);
@@ -309,13 +311,16 @@ export default class SHACLCWriter {
     }
   }
 
-  private writeParams(term: Term, first = true, allowedParam: { [key: string]: boolean }, shortcuts = false) {
+  private writeParams(
+    term: Term, first = true, allowedParam: Record<string, boolean>, shortcuts = false,
+  ) {
     // TODO Stream this part
     const or = this.orProperties(term, allowedParam);
     const params = this.singleLayerPropertiesList(term, allowedParam);
 
     for (const statement of or) {
       if (first) {
+        // eslint-disable-next-line no-param-reassign
         first = false;
       } else {
         this.writer.add(' ');
@@ -361,18 +366,19 @@ export default class SHACLCWriter {
     const min = this.singleObject(property, new NamedNode(sh.minCount));
     const max = this.singleObject(property, new NamedNode(sh.maxCount));
     const nodeKind = this.singleObject(property, new NamedNode(sh.nodeKind));
-    const _class = this.singleObject(property, new NamedNode(sh._class));
+    // eslint-disable-next-line no-underscore-dangle
+    const propertyClass = this.singleObject(property, new NamedNode(sh._class));
     const datatype = this.singleObject(property, new NamedNode(sh.datatype));
     const nodeShapes = this.store.getObjectsOnce(property, new NamedNode(sh.node), null);
 
     if (nodeKind) {
       this.writer.add(' ');
-      this.writer.add(this.getShaclName(nodeKind));
+      this.writer.add(getShaclName(nodeKind));
     }
 
-    if (_class) {
+    if (propertyClass) {
       this.writer.add(' ');
-      this.writer.add(this.termToString(_class));
+      this.writer.add(this.termToString(propertyClass));
     }
 
     if (datatype) {
@@ -510,53 +516,4 @@ export default class SHACLCWriter {
       throw new Error('Path should be named node or blank node');
     }
   }
-
-  // private pathString(term: Term, braces: boolean = false): string {
-  //   if (term.termType === 'NamedNode') {
-  //     return this.termToString(term)
-  //   } else if (term.termType === 'BlankNode') {
-  //     const quads = this.store.getQuadsOnce(term, null, null, null)
-  //     if (quads.length === 1) {
-  //       const { predicate, object } = quads[0]
-  //       switch (predicate.value) {
-  //         case sh.inversePath:
-  //           return '^' + this.pathString(object, true)
-  //         case sh.alternativePath: {
-  //           const alternatives = this.getList(object).map(path => this.pathString(path, true))
-  //           if (alternatives.length === 0) {
-  //             throw new Error('Invalid Path')
-  //           } else if (alternatives.length === 1) {
-  //             return alternatives[0]
-  //           } else if (braces) {
-  //             return '(' + alternatives.join('|') + ')'
-  //           } else {
-  //             return alternatives.join('|')
-  //           }
-  //         }
-  //         case sh.zeroOrMorePath:
-  //           return this.pathString(object, true) + '*'
-  //         case sh.oneOrMorePath:
-  //           return this.pathString(object, true) + '+'
-  //         case sh.zeroOrOnePath:
-  //           return this.pathString(object, true) + '?'
-  //         default:
-  //           throw new Error(`Invalid path type ${term.value}`)
-  //       }
-  //     } else {
-  //       // throw new Error('inside sequence')
-  //       const sequence = this.getList(term).map(path => this.pathString(path, true))
-  //       if (sequence.length === 0) {
-  //         throw new Error('Invalid Path')
-  //       } else if (sequence.length === 1) {
-  //         return sequence[0]
-  //       } else if (braces) {
-  //         return '(' + sequence.join('/') + ')'
-  //       } else {
-  //         return sequence.join('/')
-  //       }
-  //     }
-  //   } else {
-  //     throw new Error('Path should be named node or blank node')
-  //   }
-  // }
 }
