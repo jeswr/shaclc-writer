@@ -1,11 +1,15 @@
+/* eslint-disable no-unused-vars */
+/* eslint-disable lines-between-class-members */
+/* eslint-disable no-dupe-class-members */
 /**
  * Generates a SHACLC file stream from a quad stream, since SHACLC is
  * lossy with respect to N3, a stream of quads that could not be
  * written is also output.
  */
 import {
-  NamedNode, Term, Quad, Quad_Object,
+  Term, Quad, Quad_Object, NamedNode,
 } from 'n3';
+import * as RDF from 'rdf-js';
 import { termToString } from 'rdf-string-ttl';
 import {
   sh, rdf, rdfs, owl,
@@ -20,34 +24,46 @@ import nodeParam from './node-param';
 type Property = { name: string, type: 'pred' | 'not', object: Quad_Object }
 
 export default class SHACLCWriter {
+  private prefixes: { [prefix: string]: string } = {};
+
   private prefixRev: { [namespace: string]: string } = {};
+
+  private writer: Writer;
 
   constructor(
     // eslint-disable-next-line no-unused-vars
     private store: Store,
     // eslint-disable-next-line no-unused-vars
-    public writer: Writer,
-    private prefixes: { [prefix: string]: string } = {},
+    writer: Writer,
+    prefixes: { [prefix: string]: string | RDF.NamedNode } = {},
     // eslint-disable-next-line no-unused-vars
     private base: NamedNode | undefined = undefined,
   ) {
     for (const key of Object.keys(prefixes)) {
-      this.prefixRev[prefixes[key]] = key;
+      const iri = prefixes[key];
+      if (typeof iri === 'string') {
+        this.prefixRev[iri] = key;
+        this.prefixes[key] = iri;
+      } else {
+        this.prefixes[key] = iri.value;
+        this.prefixRev[iri.value] = key;
+      }
     }
-    this.write();
+    this.writer = writer;
   }
 
   /**
    * Used to initiate the flow of data through the writer.
    */
   // TODO: Make initialisation async
-  private write() {
+  public write() {
     if (this.base) {
       this.writer.add(`BASE ${termToString(this.base)}`).newLine();
       this.writeImports();
     }
     this.writePrefixes();
     this.writeShapes();
+    this.writer.end();
     // this.failedQuads.append(this.store.getQuads(null, null, null, null))
   }
 
@@ -98,7 +114,7 @@ export default class SHACLCWriter {
       // TODO: Fix escaping issue
       return termToString(term).replace(/\\/g, '\\\\');
     }
-    throw new Error(`Invalid term type for extra statement ${term.termType}`);
+    throw new Error(`Invalid term type for extra statement ${term.value} (${term.termType})`);
   }
 
   private writeShapes() {
@@ -122,7 +138,14 @@ export default class SHACLCWriter {
       if (targetClasses.length > 0) {
         this.writer.add('-> ');
         for (const targetClass of targetClasses) {
-          this.writer.add(this.termToString(targetClass));
+          if (targetClass.termType === 'NamedNode') {
+            this.writer.add(this.termToString(targetClass));
+          } else {
+            this.writer.add('!');
+            this.writer.add(this.termToString(
+              this.singleObject(targetClass, new NamedNode(sh.not), true),
+            ));
+          }
           this.writer.add(' ');
         }
       }
@@ -207,9 +230,9 @@ export default class SHACLCWriter {
     let termTemp: Term = term;
     const list: Term[] = [];
     // TODO: Handle poorly formed RDF lists
-    while (!term.equals(new NamedNode(rdf.nil))) {
-      list.push(this.singleObject(termTemp, new NamedNode(rdf.first), true) as Term);
-      termTemp = this.singleObject(termTemp, new NamedNode(rdf.rest), true) as Term;
+    while (!termTemp.equals(new NamedNode(rdf.nil))) {
+      list.push(this.singleObject(termTemp, new NamedNode(rdf.first), true));
+      termTemp = this.singleObject(termTemp, new NamedNode(rdf.rest), true);
     }
     return list;
   }
@@ -240,7 +263,9 @@ export default class SHACLCWriter {
    */
   // TODO: FIX private singleObject(subject: Term, predicate: Term, strict: true): Term;
   // TODO: Put deletions in here?
-  private singleObject(subject: Term | null, predicate: Term | null, strict: boolean = false):
+  private singleObject(subject: Term | null, predicate: Term | null, strict: true): Term;
+  private singleObject(subject: Term | null, predicate: Term | null): Term | undefined;
+  private singleObject(subject: Term | null, predicate: Term | null, strict?: boolean):
     Term | undefined {
     return this.singleQuad(subject, predicate, strict)?.object;
   }
@@ -283,7 +308,12 @@ export default class SHACLCWriter {
         this.writer.add(getShaclName(object));
         return;
       }
-      case 'class':
+      case 'class': {
+        console.log('a', object.value);
+        this.writer.add(this.termToString(object));
+        console.log('ab');
+        return;
+      }
       case 'datatype': {
         this.writer.add(this.termToString(object));
         return;

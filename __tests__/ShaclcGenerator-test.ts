@@ -1,17 +1,18 @@
 /* eslint-disable no-undef */
-import { Parser, NamedNode } from 'n3';
+import { Parser, Prefixes, NamedNode } from 'n3';
+import * as RDF from 'rdf-js';
 import fs, { readFileSync } from 'fs';
 import pathLib from 'path';
-import SHACLCWriter from '../ShaclcGenerator';
-import MyStore from '../volatile-store';
-import MyWriter from '../writer';
+import SHACLCWriter from '../lib/ShaclcGenerator';
+import MyStore from '../lib/volatile-store';
+import MyWriter from '../lib/writer';
 
 async function getText(path: string): Promise<string> {
   const file = readFileSync(path).toString();
   const parser = new Parser();
   const base = /@base <[^>]*(?=>)/ui.exec(file)?.[0]?.slice(7);
-  const prefixes = await new Promise((resolve, reject) => {
-    parser.parse(file, (error, quads, pref) => {
+  const prefixes: Prefixes<RDF.NamedNode<string>> = await new Promise((resolve, reject) => {
+    parser.parse(file, (error, quads, pref: Prefixes<RDF.NamedNode<string>>) => {
       if (pref) {
         resolve(pref);
       }
@@ -23,12 +24,22 @@ async function getText(path: string): Promise<string> {
   const fileQuads = parser.parse(file);
   const store = new MyStore();
   store.addQuads(fileQuads);
-  const w = new MyWriter();
-  const writer = new SHACLCWriter(store, w, prefixes, base ? new NamedNode(base) : undefined);
-  return writer.writer.s;
+  return new Promise((resolve) => {
+    let s = '';
+    const w = new MyWriter({
+      write: (chunk: string) => {
+        s += chunk;
+      },
+      end: () => {
+        resolve(s);
+      },
+    });
+    const writer = new SHACLCWriter(store, w, prefixes, base ? new NamedNode(base) : undefined);
+    writer.write();
+  });
 }
 
-const basePath = pathLib.join(__dirname, './shacl-test-suite');
+const basePath = pathLib.join(__dirname, 'shaclc-test-suite');
 describe('Running SHACLC test suite', () => {
   const paths = fs.readdirSync(basePath).map((f) => /^[^.]*/.exec(f)?.[0]);
   const hash: {[path: string]: boolean} = {};

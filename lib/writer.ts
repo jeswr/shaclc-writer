@@ -9,7 +9,7 @@ export default class Writer {
 
   private write: writeFunc
 
-  private end: (done?: Function) => void;
+  end: (done?: Function) => void;
 
   constructor(options: { write: writeFunc, end: (done?: Function) => void }) {
     this.write = options.write;
@@ -17,8 +17,7 @@ export default class Writer {
   }
 
   indent() {
-    // eslint-disable-next-line no-plusplus
-    this.indents++;
+    this.indents += 1;
     return this;
   }
 
@@ -26,13 +25,12 @@ export default class Writer {
     if (this.indents < 1) {
       throw new Error(`Trying to deindent when indent is only ${this.indents}`);
     }
-    // eslint-disable-next-line no-plusplus
-    this.indents--;
+    this.indents -= 1;
     return this;
   }
 
   add(s: string, newLine = false) {
-    this.write(newLine ? `\n${'\t'.repeat(this.indents)}` : '', 'utf-8');
+    this.write(newLine ? `\n${'\t'.repeat(this.indents)}${s}` : s, 'utf-8');
     return this;
   }
 
