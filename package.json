@@ -7,7 +7,7 @@
   "scripts": {
     "lint": "eslint lib/* --ext .ts",
     "build": "tsc",
-    "prepublish": "build",
+    "prepublish": "tsc",
     "test": "jest --coverage"
   },
   "repository": {
