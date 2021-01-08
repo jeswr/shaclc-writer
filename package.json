@@ -54,6 +54,7 @@
   "jest": {
     "preset": "ts-jest",
     "collectCoverage": true,
+    "verbose": false,
     "coverageThreshold": {
       "global": {
         "branches": 100,

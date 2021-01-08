@@ -7,36 +7,53 @@ import SHACLCWriter from '../lib/ShaclcGenerator';
 import MyStore from '../lib/volatile-store';
 import MyWriter from '../lib/writer';
 
-async function getText(path: string): Promise<string> {
-  const file = readFileSync(path).toString();
+import errorSuiteImport from './error-suite/errors.json';
+
+const errorSuite: Record<string, string> = errorSuiteImport;
+
+async function transformText(file: string): Promise<string> {
   const parser = new Parser();
   const base = /@base <[^>]*(?=>)/ui.exec(file)?.[0]?.slice(7);
-  const prefixes: Prefixes<RDF.NamedNode<string>> = await new Promise((resolve, reject) => {
-    parser.parse(file, (error, quads, pref: Prefixes<RDF.NamedNode<string>>) => {
-      if (pref) {
-        resolve(pref);
-      }
-      if (error) {
-        reject(error);
-      }
-    });
-  });
+  const prefixes: Prefixes<RDF.NamedNode<string> | string> = await new Promise(
+    (resolve, reject) => {
+      parser.parse(file, (error, quads, pref: Prefixes<RDF.NamedNode<string>>) => {
+        if (pref) {
+          resolve(pref);
+        }
+        if (error) {
+          reject(error);
+        }
+      });
+    },
+  );
+  if (prefixes.ex && typeof prefixes.ex === 'string') {
+    prefixes.ex = new NamedNode(prefixes.ex ?? 'http://example.org/test#');
+  }
   const fileQuads = parser.parse(file);
   const store = new MyStore();
   store.addQuads(fileQuads);
-  return new Promise((resolve) => {
-    let s = '';
-    const w = new MyWriter({
-      write: (chunk: string) => {
-        s += chunk;
-      },
-      end: () => {
-        resolve(s);
-      },
-    });
-    const writer = new SHACLCWriter(store, w, prefixes, base ? new NamedNode(base) : undefined);
-    writer.write();
+  return new Promise((resolve, reject) => {
+    try {
+      let s = '';
+      const w = new MyWriter({
+        write: (chunk: string) => {
+          s += chunk;
+        },
+        end: () => {
+          resolve(s);
+        },
+      });
+      const writer = new SHACLCWriter(store, w, prefixes, base ? new NamedNode(base) : undefined);
+      writer.write();
+    } catch (e) {
+      reject(e);
+    }
   });
+}
+
+async function getText(path: string) {
+  const file = readFileSync(path).toString();
+  return transformText(file);
 }
 
 const basePath = pathLib.join(__dirname, 'shaclc-test-suite');
@@ -87,6 +104,17 @@ describe('Running SHACLC test suite', () => {
       expected = expected.replace(/\n+/g, '\n');
       expected = expected.replace(/^\n$/g, '');
       expect(actual).toEqual(expected);
+    });
+  }
+});
+
+describe('error tests', () => {
+  // eslint-disable-next-line guard-for-in
+  for (const file in errorSuite) {
+    // eslint-disable-next-line no-loop-func
+    it(`Should throw error '${errorSuite[file]}' in file ${file}.ttl`, async () => {
+      await expect(getText(pathLib.join(__dirname, 'error-suite', `${file}.ttl`)))
+        .rejects.toEqual(Error(errorSuite[file]));
     });
   }
 });

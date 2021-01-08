@@ -59,7 +59,7 @@ export default class SHACLCWriter {
   public write() {
     if (this.base) {
       this.writer.add(`BASE ${termToString(this.base)}`).newLine();
-      this.writeImports();
+      this.writeImports(this.base);
     }
     this.writePrefixes();
     this.writeShapes();
@@ -67,11 +67,8 @@ export default class SHACLCWriter {
     // this.failedQuads.append(this.store.getQuads(null, null, null, null))
   }
 
-  private writeImports() {
-    if (!this.base) {
-      throw new Error('Write imports cannot be called if base is not defined');
-    }
-    const imports = this.store.getObjectsOnce(this.base, new NamedNode(owl.imports), null);
+  private writeImports(base: NamedNode) {
+    const imports = this.store.getObjectsOnce(base, new NamedNode(owl.imports), null);
     if (imports.length > 0) {
       for (const imp of imports) {
         this.writer.add(`IMPORTS <${imp.value}>`);
@@ -213,7 +210,7 @@ export default class SHACLCWriter {
         if (!property) {
           // TODO HANDLE THIS CASE BY EXTENDING SHACLC SYNTAX
           this.store.addQuad(quad);
-          throw new Error('Each entry of the or statement must declare exactly one property');
+          throw new Error('Each entry of the \'or\' statement must declare exactly one property');
         }
         statement.push(property);
       }
@@ -273,13 +270,13 @@ export default class SHACLCWriter {
   private singleQuad(subject: Term | null, predicate: Term | null, strict: boolean = false):
     Quad | undefined {
     const objects = this.store.getQuadsOnce(subject, predicate, null, null);
-    if (objects.length > 1) {
-      this.store.addQuads(objects);
-      throw new Error(`The subject and predicate ${subject?.value} ${predicate?.value} can have at most one object. Instead has ${objects.length}.`);
-    }
     if (strict && objects.length === 0) {
       this.store.addQuads(objects);
-      throw new Error(`The subject and predicate ${subject?.value} ${predicate?.value} must have exactly one object. Instead has ${objects.length}.`);
+      throw new Error(`The subject and predicate ${subject?.value} ${predicate?.value} must have exactly one object. Instead has ${objects.length}`);
+    }
+    if (objects.length > 1) {
+      this.store.addQuads(objects);
+      throw new Error(`The subject and predicate ${subject?.value} ${predicate?.value} can have at most one object. Instead has ${objects.length}`);
     }
     return objects.length === 1 ? objects[0] : undefined;
   }
@@ -430,7 +427,7 @@ export default class SHACLCWriter {
 
       if (max) {
         if (max.termType !== 'Literal' || max.datatypeString !== 'http://www.w3.org/2001/XMLSchema#integer') {
-          throw new Error('Invalid min value, must me an integer literal');
+          throw new Error('Invalid max value, must me an integer literal');
         }
         this.store.removeMatches(property, new NamedNode(sh.maxCount), undefined, undefined);
         this.writer.add(max.value);
@@ -479,7 +476,7 @@ export default class SHACLCWriter {
           case sh.alternativePath: {
             const alternatives = this.getList(object);
             if (alternatives.length === 0) {
-              throw new Error('Invalid Path');
+              throw new Error('Invalid Alternative Path - no options');
             } else if (alternatives.length === 1) {
               this.writePath(alternatives[0]);
             } else {
