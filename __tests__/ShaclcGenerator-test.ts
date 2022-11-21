@@ -69,6 +69,7 @@ describe('Running SHACLC test suite', () => {
   }
   for (const path of uniquePaths) {
     // eslint-disable-next-line no-loop-func
+    // if (path.includes('node-or-3'))
     test(path, async () => {
       const fullPath = pathLib.join(basePath, path);
       let expected = readFileSync(`${fullPath}.shaclc`).toString();
