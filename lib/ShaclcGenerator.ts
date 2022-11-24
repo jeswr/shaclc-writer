@@ -38,6 +38,7 @@ export default class SHACLCWriter {
     prefixes: { [prefix: string]: string | RDF.NamedNode } = {},
     // eslint-disable-next-line no-unused-vars
     private base: NamedNode | undefined = undefined,
+    private errorOnExtraQuads = true,
   ) {
     for (const key of Object.keys(prefixes)) {
       const iri = prefixes[key];
@@ -57,12 +58,28 @@ export default class SHACLCWriter {
    */
   // TODO: Make initialisation async
   public write() {
-    if (this.base) {
-      this.writer.add(`BASE ${termToString(this.base)}`).newLine();
-      this.writeImports(this.base);
+    const onotology = this.store.getQuads(null, rdf.type, owl.Ontology, null);
+
+    if (onotology.length === 1 && onotology[0].subject.termType === 'NamedNode') {
+      const base = onotology[0].subject;
+      this.store.removeQuads(onotology);
+
+      // Don't write default
+      if (!base.equals(new NamedNode('urn:x-base:default')))
+        this.writer.add(`BASE ${termToString(base)}`).newLine();
+
+      this.writeImports(base);
+    } else {
+      throw new Error('Base expected')
     }
+
     this.writePrefixes();
     this.writeShapes();
+
+    if (this.errorOnExtraQuads && this.store.size > 0) {
+      throw new Error(`Dataset contains quads that cannot be written in SHACLC`);
+    }
+
     this.writer.end();
     // this.failedQuads.append(this.store.getQuads(null, null, null, null))
   }
@@ -89,9 +106,13 @@ export default class SHACLCWriter {
     }
   }
 
-  private termToString(term: Term) {
+  private termToString(term: Term, disableShaclName = false) {
     // TODO: Make sure this does not introduce any errors
     try {
+      if (disableShaclName) {
+        throw new Error('Shacl name disabled')
+      }
+
       return getShaclName(term);
       // eslint-disable-next-line no-empty
     } catch (e) { }
@@ -205,7 +226,6 @@ export default class SHACLCWriter {
     const orProperties: Property[][] = [];
     for (const quad of this.store.getQuadsOnce(term, new NamedNode(sh.or), null, null)) {
       const statement: Property[] = [];
-      console.log('or properties')
       for (const item of this.getList(quad.object)) {
         const property = this.expectOneProperty(item, allowedPredicates);
         if (!property) {
@@ -224,7 +244,6 @@ export default class SHACLCWriter {
    * Extract an rdf:list
    */
   private getList(term: Term): Term[] {
-    console.log('get list called for', term)
     // TODO: Fix gross type casting
     let termTemp: Term = term;
     const list: Term[] = [];
@@ -240,7 +259,6 @@ export default class SHACLCWriter {
     if (object.termType === 'BlankNode') {
       this.writer.add('[');
       let first = true;
-      console.log('write IRI or literal array')
       for (const term of this.getList(object)) {
         if (first) {
           first = false;
@@ -272,10 +290,6 @@ export default class SHACLCWriter {
 
   private singleQuad(subject: Term | null, predicate: Term | null, strict: boolean = false):
     Quad | undefined {
-    console.log(
-      this.store.getQuads(null, null, null, null)
-    )
-
     const objects = this.store.getQuadsOnce(subject, predicate, null, null);
     if (strict && objects.length !== 1) {
       this.store.addQuads(objects);
@@ -316,9 +330,7 @@ export default class SHACLCWriter {
         return;
       }
       case 'class': {
-        console.log('a', object.value);
         this.writer.add(this.termToString(object));
-        console.log('ab');
         return;
       }
       case 'datatype': {
@@ -466,6 +478,30 @@ export default class SHACLCWriter {
       this.writer.add(' ');
       this.writeShapeBody(shape);
     }
+
+    // TODO: Re-enable this
+    // let esc = false;
+
+    // for (const p of this.store.getQuads(property, null, null, null)) {
+    //   if (p.predicate.termType == 'NamedNode') {
+    //     if (!esc) {
+    //       this.writer.add(' // ')
+    //       esc = true;
+    //     }
+
+    //     this.writeIriLiteralOrArray(p.predicate);
+    //     this.writer.add(' ');
+    //     this.writeIriLiteralOrArray(p.object);
+    //     this.writer.add(' ');
+
+    //     this.store.removeQuad(p);
+    //   }
+    // }
+
+    // if (esc) {
+    //   this.writer.add(' //')
+    // }
+
     if (nestedShapes.length === 0) {
       this.writer.add(' .');
     }
@@ -484,7 +520,6 @@ export default class SHACLCWriter {
             this.writePath(object, true);
             return;
           case sh.alternativePath: {
-            console.log('alternative path')
             const alternatives = this.getList(object);
             if (alternatives.length === 0) {
               throw new Error('Invalid Alternative Path - no options');
@@ -527,13 +562,14 @@ export default class SHACLCWriter {
       } else {
         // TODO Make more efficient
         this.store.addQuads(quads);
-        console.log('sequence')
         const sequence = this.getList(term);
         if (sequence.length === 0) {
           throw new Error('Invalid Path');
-        } else if (sequence.length === 1) {
-          this.writePath(sequence[0]);
-        } else {
+        }
+        // else if (sequence.length === 1) {
+        //   this.writePath(sequence[0]);
+        // } 
+        else {
           if (braces) {
             this.writer.add('(');
           }
