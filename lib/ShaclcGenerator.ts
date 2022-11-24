@@ -65,19 +65,18 @@ export default class SHACLCWriter {
       this.store.removeQuads(onotology);
 
       // Don't write default
-      if (!base.equals(new NamedNode('urn:x-base:default')))
-        this.writer.add(`BASE ${termToString(base)}`).newLine();
+      if (!base.equals(new NamedNode('urn:x-base:default'))) this.writer.add(`BASE ${termToString(base)}`).newLine();
 
       this.writeImports(base);
     } else {
-      throw new Error('Base expected')
+      throw new Error('Base expected');
     }
 
     this.writePrefixes();
     this.writeShapes();
 
     if (this.errorOnExtraQuads && this.store.size > 0) {
-      throw new Error(`Dataset contains quads that cannot be written in SHACLC`);
+      throw new Error('Dataset contains quads that cannot be written in SHACLC');
     }
 
     this.writer.end();
@@ -110,7 +109,7 @@ export default class SHACLCWriter {
     // TODO: Make sure this does not introduce any errors
     try {
       if (disableShaclName) {
-        throw new Error('Shacl name disabled')
+        throw new Error('Shacl name disabled');
       }
 
       return getShaclName(term);
@@ -185,6 +184,7 @@ export default class SHACLCWriter {
         if (quads.length !== 1) {
           throw new Error('Can only handle having one predicate of \'not\'');
         }
+        // eslint-disable-next-line no-param-reassign
         [quad] = quads;
         name = getShaclName(quad.predicate);
         type = 'not';
@@ -565,11 +565,12 @@ export default class SHACLCWriter {
         const sequence = this.getList(term);
         if (sequence.length === 0) {
           throw new Error('Invalid Path');
-        }
-        // else if (sequence.length === 1) {
-        //   this.writePath(sequence[0]);
-        // } 
-        else {
+
+          // TODO: See if the following case is necessary
+          // else if (sequence.length === 1) {
+          //   this.writePath(sequence[0]);
+          // }
+        } else {
           if (braces) {
             this.writer.add('(');
           }

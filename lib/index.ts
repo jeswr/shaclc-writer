@@ -24,14 +24,14 @@ export async function write(quads: Quad[], options?: Options): Promise<Result> {
         },
         end: () => {
           let extraQuads: Quad[] | undefined = volatileStore.getQuads(null, null, null, null);
-          
+
           if (extraQuads.length === 0) {
             extraQuads = undefined;
           }
 
           resolve({
             text: s,
-            extraQuads
+            extraQuads,
           });
         },
       });
@@ -40,7 +40,7 @@ export async function write(quads: Quad[], options?: Options): Promise<Result> {
         w,
         options?.prefixes,
         undefined,
-        options?.errorOnUnused !== false
+        options?.errorOnUnused !== false,
       );
       writer.write();
     } catch (e) {

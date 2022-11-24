@@ -1,5 +1,7 @@
 /* eslint-disable no-undef */
-import { Parser, Prefixes, NamedNode, Quad } from 'n3';
+import {
+  Parser, Prefixes, NamedNode, Quad,
+} from 'n3';
 import * as RDF from 'rdf-js';
 import fs, { readFileSync } from 'fs';
 import pathLib from 'path';
@@ -8,6 +10,8 @@ import MyStore from '../lib/volatile-store';
 import MyWriter from '../lib/writer';
 
 import errorSuiteImport from './error-suite/errors.json';
+
+import { write } from '../lib/index';
 
 const errorSuite: Record<string, string> = errorSuiteImport;
 
@@ -69,7 +73,6 @@ describe('Running SHACLC test suite', () => {
   }
   for (const path of uniquePaths) {
     // eslint-disable-next-line no-loop-func
-    // if (path.includes('node-or-3'))
     test(path, async () => {
       const fullPath = pathLib.join(basePath, path);
       let expected = readFileSync(`${fullPath}.shaclc`).toString();
@@ -123,9 +126,6 @@ describe('error tests', () => {
   }
 });
 
-import { write } from '../lib/index'
-
-
 const ttl = `
 @base <http://example.org/array-in> .
 @prefix ex: <http://example.org/test#> .
@@ -136,17 +136,17 @@ const ttl = `
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 <>
-	a owl:Ontology ;
+  a owl:Ontology ;
 .
 
 ex:TestShape
-	a sh:NodeShape ;
-	sh:property [
-		sh:path ex:property ;
-		sh:in ( ex:Instance1 true "string" 42 ) ;
-	] ;
+  a sh:NodeShape ;
+  sh:property [
+    sh:path ex:property ;
+    sh:in ( ex:Instance1 true "string" 42 ) ;
+  ] ;
 .
-`
+`;
 
 describe('index tests', () => {
   it('should do basic writing', async () => {
@@ -154,48 +154,48 @@ describe('index tests', () => {
 
     const { text } = await write(quads, {
       prefixes: {
-        ex: "http://example.org/test#",
-        sh: "http://www.w3.org/ns/shacl#",
-        owl: "http://www.w3.org/2002/07/owl#"
-      }
+        ex: 'http://example.org/test#',
+        sh: 'http://www.w3.org/ns/shacl#',
+        owl: 'http://www.w3.org/2002/07/owl#',
+      },
     });
-  
-    expect(typeof text).toEqual('string')
+
+    expect(typeof text).toEqual('string');
   });
 
   it('should error on extra quads', async () => {
-    const quads = (new Parser()).parse(ttl + "\n" + "ex:Jesse ex:knows ex:Bob .");
+    const quads = (new Parser()).parse(`${ttl}\nex:Jesse ex:knows ex:Bob .`);
 
     const promise = write(quads, {
       prefixes: {
-        ex: "http://example.org/test#",
-        sh: "http://www.w3.org/ns/shacl#",
-        owl: "http://www.w3.org/2002/07/owl#"
-      }
+        ex: 'http://example.org/test#',
+        sh: 'http://www.w3.org/ns/shacl#',
+        owl: 'http://www.w3.org/2002/07/owl#',
+      },
     });
-  
-    expect(promise).rejects.toThrowError()
+
+    expect(promise).rejects.toThrowError();
   });
 
   it('should produce on extra quads', async () => {
-    const quads = (new Parser()).parse(ttl + "\n" + "ex:Jesse ex:knows ex:Bob .");
+    const quads = (new Parser()).parse(`${ttl}\nex:Jesse ex:knows ex:Bob .`);
 
     const { text, extraQuads } = await write(quads, {
       prefixes: {
-        ex: "http://example.org/test#",
-        sh: "http://www.w3.org/ns/shacl#",
-        owl: "http://www.w3.org/2002/07/owl#"
+        ex: 'http://example.org/test#',
+        sh: 'http://www.w3.org/ns/shacl#',
+        owl: 'http://www.w3.org/2002/07/owl#',
       },
-      errorOnUnused: false
+      errorOnUnused: false,
     });
-  
-    expect(typeof text).toEqual('string')
+
+    expect(typeof text).toEqual('string');
     expect(extraQuads).toEqual([
       new Quad(
-        new NamedNode("http://example.org/test#Jesse"),
-        new NamedNode("http://example.org/test#knows"),
-        new NamedNode("http://example.org/test#Bob"),
-      )
-    ])
+        new NamedNode('http://example.org/test#Jesse'),
+        new NamedNode('http://example.org/test#knows'),
+        new NamedNode('http://example.org/test#Bob'),
+      ),
+    ]);
   });
-})
+});
