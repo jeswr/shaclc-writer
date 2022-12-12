@@ -1,6 +1,6 @@
 /* eslint-disable no-undef */
 import {
-  Parser, Prefixes, NamedNode, Quad,
+  Parser, Prefixes, NamedNode, Quad, DataFactory,
 } from 'n3';
 import type * as RDF from '@rdfjs/types';
 import fs, { readFileSync } from 'fs';
@@ -151,7 +151,7 @@ ex:TestShape
 `;
 
 describe('index tests', () => {
-  it('should do basic writing', async () => {
+  it('should do basic writing when prefixes are provided', async () => {
     const quads = (new Parser()).parse(ttl);
 
     const { text } = await write(quads, {
@@ -165,8 +165,85 @@ describe('index tests', () => {
     expect(typeof text).toEqual('string');
   });
 
+  it('should do basic writing when no options are provided', async () => {
+    const quads = (new Parser()).parse(ttl);
+
+    const { text } = await write(quads);
+
+    expect(typeof text).toEqual('string');
+  });
+
   it('should error on extra quads', async () => {
     const quads = (new Parser()).parse(`${ttl}\nex:Jesse ex:knows ex:Bob .`);
+
+    const promise = write(quads, {
+      prefixes: {
+        ex: 'http://example.org/test#',
+        sh: 'http://www.w3.org/ns/shacl#',
+        owl: 'http://www.w3.org/2002/07/owl#',
+      },
+    });
+
+    expect(promise).rejects.toThrowError();
+  });
+
+  it('should error on all quads in non-default graph', async () => {
+    let quads = (new Parser()).parse(ttl);
+
+    quads = quads.map((q) => DataFactory.quad(
+      q.subject,
+      q.predicate,
+      q.object,
+      DataFactory.namedNode('http://example.or/#myGraph'),
+    ));
+
+    const promise = write(quads, {
+      prefixes: {
+        ex: 'http://example.org/test#',
+        sh: 'http://www.w3.org/ns/shacl#',
+        owl: 'http://www.w3.org/2002/07/owl#',
+      },
+    });
+
+    expect(promise).rejects.toThrowError();
+  });
+
+  it('should error on one quad in non-default graph', async () => {
+    let quads = (new Parser()).parse(ttl);
+
+    quads = [
+      DataFactory.quad(
+        quads[0].subject,
+        quads[0].predicate,
+        quads[0].object,
+        DataFactory.namedNode('http://example.or/#myGraph'),
+      ),
+      ...quads.splice(1),
+    ];
+
+    const promise = write(quads, {
+      prefixes: {
+        ex: 'http://example.org/test#',
+        sh: 'http://www.w3.org/ns/shacl#',
+        owl: 'http://www.w3.org/2002/07/owl#',
+      },
+    });
+
+    expect(promise).rejects.toThrowError();
+  });
+
+  it('should error on all quads in different graphs', async () => {
+    let quads = (new Parser()).parse(ttl);
+
+    let i = 0;
+
+    quads = quads.map((q) => DataFactory.quad(
+      q.subject,
+      q.predicate,
+      q.object,
+      // eslint-disable-next-line no-plusplus
+      DataFactory.namedNode(`http://example.or/#${i++}`),
+    ));
 
     const promise = write(quads, {
       prefixes: {
