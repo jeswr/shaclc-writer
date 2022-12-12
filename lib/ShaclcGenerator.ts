@@ -7,9 +7,9 @@
  * written is also output.
  */
 import {
-  Term, Quad, Quad_Object, NamedNode, DataFactory,
+  Term, Quad, Quad_Object, NamedNode,
 } from 'n3';
-import * as RDF from 'rdf-js';
+import type * as RDF from '@rdfjs/types';
 import { termToString } from 'rdf-string-ttl';
 import {
   sh, rdf, rdfs, owl,
@@ -128,8 +128,7 @@ export default class SHACLCWriter {
       ) {
         return term.value;
       }
-      // TODO: Fix escaping issue
-      return termToString(term).replace(/\\/g, '\\\\');
+      return termToString(term);
     }
     throw new Error(`Invalid term type for extra statement ${term.value} (${term.termType})`);
   }
@@ -139,12 +138,8 @@ export default class SHACLCWriter {
     /**
      * Get every nodeshape declared at the top level
      */
-    for (const subject of this.store.getSubjectsOnce(
-      new NamedNode(rdf.type), new NamedNode(sh.NodeShape), null,
-    )) {
-      if (this.store.getQuadsOnce(
-        subject, new NamedNode(rdf.type), new NamedNode(rdfs.Class), null,
-      ).length > 0) {
+    for (const subject of this.store.getSubjectsOnce(new NamedNode(rdf.type), new NamedNode(sh.NodeShape), null)) {
+      if (this.store.getQuadsOnce(subject, new NamedNode(rdf.type), new NamedNode(rdfs.Class), null).length > 0) {
         this.writer.add('shapeClass ');
       } else {
         this.writer.add('shape ');
@@ -293,11 +288,19 @@ export default class SHACLCWriter {
     const objects = this.store.getQuadsOnce(subject, predicate, null, null);
     if (strict && objects.length !== 1) {
       this.store.addQuads(objects);
-      throw new Error(`The subject and predicate ${subject?.value} ${predicate?.value} must have exactly one object. Instead has ${objects.length}`);
+      throw new Error(`The subject and predicate ${
+        subject?.value
+      } ${
+        predicate?.value
+      } must have exactly one object. Instead has ${objects.length}`);
     }
     if (objects.length > 1) {
       this.store.addQuads(objects);
-      throw new Error(`The subject and predicate ${subject?.value} ${predicate?.value} can have at most one object. Instead has ${objects.length}`);
+      throw new Error(`The subject and predicate ${
+        subject?.value
+      } ${
+        predicate?.value
+      } can have at most one object. Instead has ${objects.length}`);
     }
     return objects.length === 1 ? objects[0] : undefined;
   }
@@ -360,9 +363,7 @@ export default class SHACLCWriter {
     }
   }
 
-  private writeParams(
-    term: Term, first = true, allowedParam: Record<string, boolean>, shortcuts = false,
-  ) {
+  private writeParams(term: Term, first = true, allowedParam: Record<string, boolean>, shortcuts = false) {
     // TODO Stream this part
     const or = this.orProperties(term, allowedParam);
     const params = this.singleLayerPropertiesList(term, allowedParam);

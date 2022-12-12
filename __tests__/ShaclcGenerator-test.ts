@@ -2,7 +2,7 @@
 import {
   Parser, Prefixes, NamedNode, Quad,
 } from 'n3';
-import * as RDF from 'rdf-js';
+import type * as RDF from '@rdfjs/types';
 import fs, { readFileSync } from 'fs';
 import pathLib from 'path';
 import SHACLCWriter from '../lib/ShaclcGenerator';
@@ -101,7 +101,10 @@ describe('Running SHACLC test suite', () => {
       expected = expected.replace(/ \| /g, '|');
       // dont care about ordering in complex 1
       expected = expected.replace('xsd:integer|xsd:string [1..1]', '[1..1] xsd:integer|xsd:string');
-      expected = expected.replace('targetNode=ex:TestNode targetSubjectsOf=ex:subjectProperty targetObjectsOf=ex:objectProperty .', 'targetNode=ex:TestNode targetObjectsOf=ex:objectProperty targetSubjectsOf=ex:subjectProperty .');
+      expected = expected.replace(
+        'targetNode=ex:TestNode targetSubjectsOf=ex:subjectProperty targetObjectsOf=ex:objectProperty .',
+        'targetNode=ex:TestNode targetObjectsOf=ex:objectProperty targetSubjectsOf=ex:subjectProperty .',
+      );
       let actual = await getText(`${fullPath}.ttl`);
       // TODO: REMOVE THIS CLEANING
       actual = actual.replace(/\n+/g, '\n');
@@ -118,10 +121,9 @@ describe('error tests', () => {
     // eslint-disable-next-line no-loop-func
     it(`Should throw error '${errorSuite[file]}' in file ${file}.ttl`, async () => {
       await expect(getText(pathLib.join(__dirname, 'error-suite', `${file}.ttl`)))
-        .rejects.toThrowError(
-        // TODO: Re-enable tests for error contexts
+        // TODO: Re-enable tests for error contexts with input
         //  errorSuite[file]
-        );
+        .rejects.toThrowError();
     });
   }
 });
