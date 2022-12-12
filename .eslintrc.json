@@ -19,6 +19,8 @@
         "import/no-unresolved": "off",
         "import/extensions": "off",
         "camelcase": "off",
-        "no-restricted-syntax": "off"
+        "no-restricted-syntax": "off",
+        "max-len": ["error", { "code": 120 }],
+        "default-param-last": "off"
     }
 }

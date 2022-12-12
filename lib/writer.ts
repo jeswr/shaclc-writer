@@ -7,7 +7,7 @@ type writeFunc = (chunk: string, encoding: string, done?: Function) => void;
 export default class Writer {
   private indents = 0;
 
-  private write: writeFunc
+  private write: writeFunc;
 
   end: (done?: Function) => void;
 
