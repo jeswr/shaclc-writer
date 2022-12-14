@@ -57,7 +57,7 @@ export default class SHACLCWriter {
    * Used to initiate the flow of data through the writer.
    */
   // TODO: Make initialisation async
-  public write() {
+  public async write() {
     const onotology = this.store.getQuads(null, rdf.type, owl.Ontology, null);
 
     if (onotology.length === 1 && onotology[0].subject.termType === 'NamedNode') {
@@ -67,13 +67,13 @@ export default class SHACLCWriter {
       // Don't write default
       if (!base.equals(new NamedNode('urn:x-base:default'))) this.writer.add(`BASE ${termToString(base)}`).newLine();
 
-      this.writeImports(base);
+      await this.writeImports(base);
     } else {
       throw new Error('Base expected');
     }
 
-    this.writePrefixes();
-    this.writeShapes();
+    await this.writePrefixes();
+    await this.writeShapes();
 
     if (this.errorOnExtraQuads && this.store.size > 0) {
       throw new Error('Dataset contains quads that cannot be written in SHACLC');
@@ -83,7 +83,7 @@ export default class SHACLCWriter {
     // this.failedQuads.append(this.store.getQuads(null, null, null, null))
   }
 
-  private writeImports(base: NamedNode) {
+  private async writeImports(base: NamedNode) {
     const imports = this.store.getObjectsOnce(base, new NamedNode(owl.imports), null);
     if (imports.length > 0) {
       for (const imp of imports) {
@@ -94,7 +94,7 @@ export default class SHACLCWriter {
     }
   }
 
-  private writePrefixes() {
+  private async writePrefixes() {
     const keys = Object.keys(this.prefixes).filter((key) => !(key in basePrefixes)).sort();
 
     if (keys.length > 0) {
@@ -133,7 +133,7 @@ export default class SHACLCWriter {
     throw new Error(`Invalid term type for extra statement ${term.value} (${term.termType})`);
   }
 
-  private writeShapes() {
+  private async writeShapes() {
     // TODO: Determine sorting
     /**
      * Get every nodeshape declared at the top level
@@ -161,7 +161,7 @@ export default class SHACLCWriter {
           this.writer.add(' ');
         }
       }
-      this.writeShapeBody(subject, false);
+      await this.writeShapeBody(subject, false);
     }
   }
 
@@ -315,14 +315,14 @@ export default class SHACLCWriter {
     this.writeIriLiteralOrArray(object);
   }
 
-  private writeAtom({ name, type, object }: Property) {
+  private async writeAtom({ name, type, object }: Property) {
     if (type === 'not') { this.writer.add('!'); }
     switch (name) {
       case 'node': {
         if (object.termType === 'NamedNode') {
           this.writer.add(`@${this.termToString(object)}`);
         } else if (object.termType === 'BlankNode') {
-          this.writeShapeBody(object);
+          await this.writeShapeBody(object);
         } else {
           throw new Error('Invalid nested shape, must be blank node or IRI');
         }
@@ -347,7 +347,7 @@ export default class SHACLCWriter {
     }
   }
 
-  private writeAssigments(assignments: Property[], divider = ' ', first = true, shortcuts: boolean) {
+  private async writeAssigments(assignments: Property[], divider = ' ', first = true, shortcuts: boolean) {
     for (const assignment of assignments) {
       if (first) {
         // eslint-disable-next-line no-param-reassign
@@ -356,14 +356,14 @@ export default class SHACLCWriter {
         this.writer.add(divider);
       }
       if (shortcuts) {
-        this.writeAtom(assignment);
+        await this.writeAtom(assignment);
       } else {
         this.writeAssigment(assignment);
       }
     }
   }
 
-  private writeParams(term: Term, first = true, allowedParam: Record<string, boolean>, shortcuts = false) {
+  private async writeParams(term: Term, first = true, allowedParam: Record<string, boolean>, shortcuts = false) {
     // TODO Stream this part
     const or = this.orProperties(term, allowedParam);
     const params = this.singleLayerPropertiesList(term, allowedParam);
@@ -375,13 +375,13 @@ export default class SHACLCWriter {
       } else {
         this.writer.add(' ');
       }
-      this.writeAssigments(statement, '|', true, shortcuts);
+      await this.writeAssigments(statement, '|', true, shortcuts);
     }
 
-    this.writeAssigments(params, ' ', first, shortcuts);
+    await this.writeAssigments(params, ' ', first, shortcuts);
   }
 
-  private writeShapeBody(term: Term, nested = true) {
+  private async writeShapeBody(term: Term, nested = true) {
     this.writer.add('{').indent();
     const properties = this.store.getObjectsOnce(term, new NamedNode(sh.property), null);
 
@@ -391,7 +391,7 @@ export default class SHACLCWriter {
       this.writer.newLine(1);
     }
 
-    this.writeParams(term, true, nodeParam);
+    await this.writeParams(term, true, nodeParam);
 
     if (annotations) {
       this.writer.add(' .');
@@ -399,7 +399,7 @@ export default class SHACLCWriter {
 
     for (const property of properties) {
       this.writer.newLine(1);
-      this.writeProperty(property);
+      await this.writeProperty(property);
     }
 
     this.writer.deindent().newLine(1);
@@ -411,7 +411,7 @@ export default class SHACLCWriter {
     }
   }
 
-  private writeProperty(property: Term) {
+  private async writeProperty(property: Term) {
     this.writePath(this.singleObject(property, new NamedNode(sh.path), true) as Term);
     const min = this.singleObject(property, new NamedNode(sh.minCount));
     const max = this.singleObject(property, new NamedNode(sh.maxCount));
@@ -460,7 +460,7 @@ export default class SHACLCWriter {
       this.writer.add(']');
     }
 
-    this.writeParams(property, false, propertyParam, true);
+    await this.writeParams(property, false, propertyParam, true);
 
     const nestedShapes = [];
 
@@ -477,7 +477,7 @@ export default class SHACLCWriter {
 
     for (const shape of nestedShapes) {
       this.writer.add(' ');
-      this.writeShapeBody(shape);
+      await this.writeShapeBody(shape);
     }
 
     // TODO: Re-enable this
