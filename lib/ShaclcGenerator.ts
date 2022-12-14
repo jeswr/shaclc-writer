@@ -9,6 +9,7 @@
 import {
   Term, Quad, Quad_Object, NamedNode,
 } from 'n3';
+import { uriToPrefix } from '@jeswr/prefixcc';
 import type * as RDF from '@rdfjs/types';
 import { termToString } from 'rdf-string-ttl';
 import {
@@ -39,6 +40,8 @@ export default class SHACLCWriter {
     // eslint-disable-next-line no-unused-vars
     private base: NamedNode | undefined = undefined,
     private errorOnExtraQuads = true,
+    private mintUnspecifiedPrefixes = false,
+    private fetch?: typeof globalThis.fetch,
   ) {
     for (const key of Object.keys(prefixes)) {
       const iri = prefixes[key];
@@ -105,7 +108,7 @@ export default class SHACLCWriter {
     }
   }
 
-  private termToString(term: Term, disableShaclName = false) {
+  private async termToString(term: Term, disableShaclName = false) {
     // TODO: Make sure this does not introduce any errors
     try {
       if (disableShaclName) {
@@ -117,8 +120,20 @@ export default class SHACLCWriter {
     } catch (e) { }
     if (term.termType === 'NamedNode') {
       const namespace = /^[^]*[#/]/.exec(term.value)?.[0];
-      if (namespace && namespace in this.prefixRev) {
-        return `${this.prefixRev[namespace]}:${term.value.slice(namespace.length)}`;
+      if (namespace) {
+        if (!(namespace in this.prefixRev) && this.mintUnspecifiedPrefixes) {
+          const prefix = await uriToPrefix(namespace, {
+            fetch: this.fetch,
+            mintOnUnknown: true,
+            existingPrefixes: this.prefixes,
+          });
+          this.prefixes[prefix] = namespace;
+          this.prefixRev[namespace] = prefix;
+        }
+
+        if (namespace in this.prefixRev) {
+          return `${this.prefixRev[namespace]}:${term.value.slice(namespace.length)}`;
+        }
       }
       return termToString(term);
     } if (term.termType === 'Literal') {
@@ -144,17 +159,17 @@ export default class SHACLCWriter {
       } else {
         this.writer.add('shape ');
       }
-      this.writer.add(this.termToString(subject));
+      this.writer.add(await this.termToString(subject));
       this.writer.add(' ');
       const targetClasses = this.store.getObjectsOnce(subject, new NamedNode(sh.targetClass), null);
       if (targetClasses.length > 0) {
         this.writer.add('-> ');
         for (const targetClass of targetClasses) {
           if (targetClass.termType === 'NamedNode') {
-            this.writer.add(this.termToString(targetClass));
+            this.writer.add(await this.termToString(targetClass));
           } else {
             this.writer.add('!');
-            this.writer.add(this.termToString(
+            this.writer.add(await this.termToString(
               this.singleObject(targetClass, new NamedNode(sh.not), true),
             ));
           }
@@ -250,7 +265,7 @@ export default class SHACLCWriter {
     return list;
   }
 
-  private writeIriLiteralOrArray(object: Quad_Object) {
+  private async writeIriLiteralOrArray(object: Quad_Object) {
     if (object.termType === 'BlankNode') {
       this.writer.add('[');
       let first = true;
@@ -260,11 +275,11 @@ export default class SHACLCWriter {
         } else {
           this.writer.add(' ');
         }
-        this.writer.add(this.termToString(term));
+        this.writer.add(await this.termToString(term));
       }
       this.writer.add(']');
     } else {
-      this.writer.add(this.termToString(object));
+      this.writer.add(await this.termToString(object));
     }
   }
 
@@ -305,14 +320,14 @@ export default class SHACLCWriter {
     return objects.length === 1 ? objects[0] : undefined;
   }
 
-  private writeAssigment({ name, type, object }: Property) {
+  private async writeAssigment({ name, type, object }: Property) {
     if (type === 'not') {
       this.writer.add('!');
       // object = this.singleObject(object, DataFactory.namedNode(sh._ + name), true)
     }
     this.writer.add(name);
     this.writer.add('=');
-    this.writeIriLiteralOrArray(object);
+    await this.writeIriLiteralOrArray(object);
   }
 
   private async writeAtom({ name, type, object }: Property) {
@@ -320,7 +335,7 @@ export default class SHACLCWriter {
     switch (name) {
       case 'node': {
         if (object.termType === 'NamedNode') {
-          this.writer.add(`@${this.termToString(object)}`);
+          this.writer.add(`@${await this.termToString(object)}`);
         } else if (object.termType === 'BlankNode') {
           await this.writeShapeBody(object);
         } else {
@@ -333,17 +348,17 @@ export default class SHACLCWriter {
         return;
       }
       case 'class': {
-        this.writer.add(this.termToString(object));
+        this.writer.add(await this.termToString(object));
         return;
       }
       case 'datatype': {
-        this.writer.add(this.termToString(object));
+        this.writer.add(await this.termToString(object));
         return;
       }
       default:
         this.writer.add(name);
         this.writer.add('=');
-        this.writeIriLiteralOrArray(object);
+        await this.writeIriLiteralOrArray(object);
     }
   }
 
@@ -358,7 +373,7 @@ export default class SHACLCWriter {
       if (shortcuts) {
         await this.writeAtom(assignment);
       } else {
-        this.writeAssigment(assignment);
+        await this.writeAssigment(assignment);
       }
     }
   }
@@ -412,7 +427,7 @@ export default class SHACLCWriter {
   }
 
   private async writeProperty(property: Term) {
-    this.writePath(this.singleObject(property, new NamedNode(sh.path), true) as Term);
+    await this.writePath(this.singleObject(property, new NamedNode(sh.path), true) as Term);
     const min = this.singleObject(property, new NamedNode(sh.minCount));
     const max = this.singleObject(property, new NamedNode(sh.maxCount));
     const nodeKind = this.singleObject(property, new NamedNode(sh.nodeKind));
@@ -428,12 +443,12 @@ export default class SHACLCWriter {
 
     if (propertyClass) {
       this.writer.add(' ');
-      this.writer.add(this.termToString(propertyClass));
+      this.writer.add(await this.termToString(propertyClass));
     }
 
     if (datatype) {
       this.writer.add(' ');
-      this.writer.add(this.termToString(datatype));
+      this.writer.add(await this.termToString(datatype));
     }
 
     if (min !== undefined || max !== undefined) {
@@ -467,7 +482,7 @@ export default class SHACLCWriter {
     for (const node of nodeShapes) {
       if (node.termType === 'NamedNode') {
         this.writer.add(' ');
-        this.writer.add(`@${this.termToString(node)}`);
+        this.writer.add(`@${await this.termToString(node)}`);
       } else if (node.termType === 'BlankNode') {
         nestedShapes.push(node);
       } else {
@@ -490,9 +505,9 @@ export default class SHACLCWriter {
     //       esc = true;
     //     }
 
-    //     this.writeIriLiteralOrArray(p.predicate);
+    //     await this.writeIriLiteralOrArray(p.predicate);
     //     this.writer.add(' ');
-    //     this.writeIriLiteralOrArray(p.object);
+    //     await this.writeIriLiteralOrArray(p.object);
     //     this.writer.add(' ');
 
     //     this.store.removeQuad(p);
@@ -508,9 +523,9 @@ export default class SHACLCWriter {
     }
   }
 
-  private writePath(term: Term, braces: boolean = false) {
+  private async writePath(term: Term, braces: boolean = false) {
     if (term.termType === 'NamedNode') {
-      this.writer.add(this.termToString(term));
+      this.writer.add(await this.termToString(term));
     } else if (term.termType === 'BlankNode') {
       const quads = this.store.getQuadsOnce(term, null, null, null);
       if (quads.length === 1) {
@@ -518,14 +533,14 @@ export default class SHACLCWriter {
         switch (predicate.value) {
           case sh.inversePath:
             this.writer.add('^');
-            this.writePath(object, true);
+            await this.writePath(object, true);
             return;
           case sh.alternativePath: {
             const alternatives = this.getList(object);
             if (alternatives.length === 0) {
               throw new Error('Invalid Alternative Path - no options');
             } else if (alternatives.length === 1) {
-              this.writePath(alternatives[0]);
+              await this.writePath(alternatives[0]);
             } else {
               if (braces) {
                 this.writer.add('(');
@@ -537,7 +552,7 @@ export default class SHACLCWriter {
                 } else {
                   this.writer.add('|');
                 }
-                this.writePath(alt, true);
+                await this.writePath(alt, true);
               }
               if (braces) {
                 this.writer.add(')');
@@ -546,15 +561,15 @@ export default class SHACLCWriter {
             return;
           }
           case sh.zeroOrMorePath:
-            this.writePath(object, true);
+            await this.writePath(object, true);
             this.writer.add('*');
             return;
           case sh.oneOrMorePath:
-            this.writePath(object, true);
+            await this.writePath(object, true);
             this.writer.add('+');
             return;
           case sh.zeroOrOnePath:
-            this.writePath(object, true);
+            await this.writePath(object, true);
             this.writer.add('?');
             return;
           default:
@@ -569,7 +584,7 @@ export default class SHACLCWriter {
 
           // TODO: See if the following case is necessary
           // else if (sequence.length === 1) {
-          //   this.writePath(sequence[0]);
+          //   await this.writePath(sequence[0]);
           // }
         } else {
           if (braces) {
@@ -582,7 +597,7 @@ export default class SHACLCWriter {
             } else {
               this.writer.add('/');
             }
-            this.writePath(alt, true);
+            await this.writePath(alt, true);
           }
           if (braces) {
             this.writer.add(')');

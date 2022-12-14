@@ -1,13 +1,16 @@
 /* eslint-disable no-undef */
-import {
-  Parser, Prefixes, NamedNode, Quad, DataFactory,
-} from 'n3';
 import type * as RDF from '@rdfjs/types';
 import fs, { readFileSync } from 'fs';
-import pathLib from 'path';
+import {
+  DataFactory, NamedNode, Parser, Prefixes, Quad,
+} from 'n3';
+import { parse } from 'shaclc-parse';
+import path from 'path';
+import * as N3 from 'n3';
 import SHACLCWriter from '../lib/ShaclcGenerator';
 import MyStore from '../lib/volatile-store';
 import MyWriter from '../lib/writer';
+import 'jest-rdf';
 
 import errorSuiteImport from './error-suite/errors.json';
 
@@ -36,7 +39,8 @@ async function transformText(file: string): Promise<string> {
   const fileQuads = parser.parse(file);
   const store = new MyStore();
   store.addQuads(fileQuads);
-  return new Promise((resolve, reject) => {
+  // eslint-disable-next-line no-async-promise-executor
+  return new Promise(async (resolve, reject) => {
     try {
       let s = '';
       const w = new MyWriter({
@@ -48,35 +52,35 @@ async function transformText(file: string): Promise<string> {
         },
       });
       const writer = new SHACLCWriter(store, w, prefixes, base ? new NamedNode(base) : undefined);
-      writer.write();
+      await writer.write();
     } catch (e) {
       reject(e);
     }
   });
 }
 
-async function getText(path: string) {
-  const file = readFileSync(path).toString();
+async function getText(pth: string) {
+  const file = readFileSync(pth).toString();
   return transformText(file);
 }
 
-const basePath = pathLib.join(__dirname, 'shaclc-test-suite');
+const basePath = path.join(__dirname, 'shaclc-test-suite');
 describe('Running SHACLC test suite', () => {
   const paths = fs.readdirSync(basePath).map((f) => /^[^.]*/.exec(f)?.[0]);
   const hash: {[path: string]: boolean} = {};
   const uniquePaths = [];
-  for (const path of paths) {
-    if (path && !(path in hash)) {
-      uniquePaths.push(path);
-      hash[path] = true;
+  for (const pth of paths) {
+    if (pth && !(pth in hash)) {
+      uniquePaths.push(pth);
+      hash[pth] = true;
     }
   }
-  for (const path of uniquePaths) {
+  for (const pth of uniquePaths) {
     // eslint-disable-next-line no-loop-func
-    test(path, async () => {
-      const fullPath = pathLib.join(basePath, path);
+    test(pth, async () => {
+      const fullPath = path.join(basePath, pth);
       let expected = readFileSync(`${fullPath}.shaclc`).toString();
-      if (path.includes('comment')) {
+      if (pth.includes('comment')) {
         // Handle comments within the file that we do not generate
         expected = expected.replace(/( )*#[a-z ."']*\n/i, '\n')
           // Handle comments at the end of the file that we do not generat
@@ -120,7 +124,7 @@ describe('error tests', () => {
   for (const file in errorSuite) {
     // eslint-disable-next-line no-loop-func
     it(`Should throw error '${errorSuite[file]}' in file ${file}.ttl`, async () => {
-      await expect(getText(pathLib.join(__dirname, 'error-suite', `${file}.ttl`)))
+      await expect(getText(path.join(__dirname, 'error-suite', `${file}.ttl`)))
         // TODO: Re-enable tests for error contexts with input
         //  errorSuite[file]
         .rejects.toThrowError();
@@ -150,8 +154,23 @@ ex:TestShape
 .
 `;
 
+jest.mock('cross-fetch', () => ({
+  fetch(uri: string | URL) {
+    if (`${uri}` === 'https://prefix.cc/reverse?uri=http%3A%2F%2Fexample.org%2Ftest%23&format=jsonld') {
+      return {
+        json() {
+          return {
+            test: 'http://example.org/test#',
+          };
+        },
+      };
+    }
+    throw new Error(`Unexpected uri: [${uri}]`);
+  },
+}));
+
 describe('index tests', () => {
-  it('should do basic writing when prefixes are provided', async () => {
+  it('should do basic writing when prefixes are provided and use those prefixes', async () => {
     const quads = (new Parser()).parse(ttl);
 
     const { text } = await write(quads, {
@@ -163,14 +182,29 @@ describe('index tests', () => {
     });
 
     expect(typeof text).toEqual('string');
+    expect(text).toContain('ex:TestShape');
+    expect(text).toContain('PREFIX ex: <http://example.org/test#>');
   });
 
-  it('should do basic writing when no options are provided', async () => {
+  it('should do basic writing when minting of prefixes is enabled', async () => {
+    const quads = (new Parser()).parse(ttl);
+
+    const { text } = await write(quads, {
+      mintPrefixes: true,
+    });
+
+    expect(typeof text).toEqual('string');
+    expect(text).toContain('test:TestShape');
+    expect(text).toContain('PREFIX test: <http://example.org/test#>');
+  });
+
+  it('should do basic writing when no options are provided and write uris verbosely', async () => {
     const quads = (new Parser()).parse(ttl);
 
     const { text } = await write(quads);
 
     expect(typeof text).toEqual('string');
+    expect(text).toContain('<http://example.org/test#Instance1>');
   });
 
   it('should error on extra quads', async () => {
@@ -276,5 +310,20 @@ describe('index tests', () => {
         new NamedNode('http://example.org/test#Bob'),
       ),
     ]);
+  });
+});
+
+describe('Testing each conformance file roundtrips', () => {
+  it.each(
+    fs.readdirSync(path.join(__dirname, 'shaclc-test-suite')).filter((str) => str.endsWith('.ttl')),
+  )('testing %s correctly parses', async (file) => {
+    const ttlString = fs.readFileSync(path.join(__dirname, 'shaclc-test-suite', file)).toString();
+    const triples = (new N3.Parser()).parse(ttlString);
+
+    expect(
+      parse((await write(triples)).text),
+    ).toBeRdfIsomorphic(
+      (new N3.Parser()).parse(ttlString),
+    );
   });
 });

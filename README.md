@@ -115,3 +115,32 @@ async function main() {
 
 main();
 ```
+
+## Minting prefixes
+
+Prefixes for namespaces that have not been specified can also be created on demand (first it attempts to look up a
+prefix on [prefix.cc](http://prefix.cc/) and will generate one if this fails).
+
+```ts
+async function main() {
+  const quads = (new Parser()).parse(ttl);
+
+  const { text } = await write(quads, {
+    mintPrefixes: true,
+  });
+
+
+  // BASE <http://example.org/array-in>
+  // PREFIX test: <http://example.org/test#>
+  //
+  // shape test:TestShape {
+  // 	test:property in=[test:Instance1 true "string" 42] .
+  // }
+  console.log(text)
+
+  // Array containing a single RDF/JS representing the triple "ex:Jesse ex:knows ex:Bob"
+  console.log(extraQuads)
+}
+
+main();
+```
