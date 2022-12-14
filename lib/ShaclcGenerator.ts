@@ -24,6 +24,24 @@ import nodeParam from './node-param';
 
 type Property = { name: string, type: 'pred' | 'not', object: Quad_Object }
 
+function getNamespace(str: string) {
+  return /^[^]*[#/]/.exec(str)?.[0];
+}
+
+const knownNamespaces: Record<string, string> = {
+  'http://www.w3.org/1999/02/22-rdf-syntax-ns#': 'rdf',
+  'http://www.w3.org/2000/01/rdf-schema#': 'rdfs',
+  'http://www.w3.org/ns/shacl#': 'sh',
+  'http://www.w3.org/2001/XMLSchema#': 'xsd',
+};
+
+const knownPrefixes: Record<string, string> = {
+  rdf: 'http://www.w3.org/1999/02/22-rdf-syntax-ns#',
+  rdfs: 'http://www.w3.org/2000/01/rdf-schema#',
+  sh: 'http://www.w3.org/ns/shacl#',
+  xsd: 'http://www.w3.org/2001/XMLSchema#',
+};
+
 export default class SHACLCWriter {
   private prefixes: { [prefix: string]: string } = {};
 
@@ -45,12 +63,11 @@ export default class SHACLCWriter {
   ) {
     for (const key of Object.keys(prefixes)) {
       const iri = prefixes[key];
-      if (typeof iri === 'string') {
-        this.prefixRev[iri] = key;
-        this.prefixes[key] = iri;
-      } else {
-        this.prefixes[key] = iri.value;
-        this.prefixRev[iri.value] = key;
+      const value = typeof iri === 'string' ? iri : iri.value;
+
+      if (!(value in knownNamespaces) && !(key in knownPrefixes)) {
+        this.prefixRev[value] = key;
+        this.prefixes[key] = value;
       }
     }
     this.writer = writer;
@@ -75,7 +92,42 @@ export default class SHACLCWriter {
       throw new Error('Base expected');
     }
 
+    if (this.mintUnspecifiedPrefixes) {
+      const namespaces = new Set<string>();
+
+      for (const term of [
+        ...this.store.getSubjects(null, null, null),
+        ...this.store.getPredicates(null, null, null),
+        ...this.store.getObjects(null, null, null),
+      ]) {
+        if (term.termType === 'NamedNode') {
+          const namespace = getNamespace(term.value);
+          if (namespace && !(namespace in this.prefixRev) && !(namespace in knownNamespaces)) {
+            namespaces.add(namespace);
+          }
+        }
+      }
+
+      const existingPrefixes = { ...this.prefixes, ...knownPrefixes };
+
+      await Promise.all(
+        [...namespaces].map((ns) => uriToPrefix(ns, {
+          fetch: this.fetch,
+          mintOnUnknown: true,
+          existingPrefixes,
+        }).then((pref) => {
+          this.prefixes[pref] = ns;
+          existingPrefixes[pref] = ns;
+          this.prefixRev[ns] = pref;
+        })),
+      );
+    }
+
     await this.writePrefixes();
+
+    this.prefixes = { ...this.prefixes, ...knownPrefixes };
+    this.prefixRev = { ...this.prefixRev, ...knownNamespaces };
+
     await this.writeShapes();
 
     if (this.errorOnExtraQuads && this.store.size > 0) {
@@ -119,18 +171,8 @@ export default class SHACLCWriter {
       // eslint-disable-next-line no-empty
     } catch (e) { }
     if (term.termType === 'NamedNode') {
-      const namespace = /^[^]*[#/]/.exec(term.value)?.[0];
-      if (namespace) {
-        if (!(namespace in this.prefixRev) && this.mintUnspecifiedPrefixes) {
-          const prefix = await uriToPrefix(namespace, {
-            fetch: this.fetch,
-            mintOnUnknown: true,
-            existingPrefixes: this.prefixes,
-          });
-          this.prefixes[prefix] = namespace;
-          this.prefixRev[namespace] = prefix;
-        }
-
+      const namespace = getNamespace(term.value);
+      if (namespace && namespace in this.prefixRev) {
         if (namespace in this.prefixRev) {
           return `${this.prefixRev[namespace]}:${term.value.slice(namespace.length)}`;
         }
