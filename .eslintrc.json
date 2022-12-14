@@ -21,6 +21,7 @@
         "camelcase": "off",
         "no-restricted-syntax": "off",
         "max-len": ["error", { "code": 120 }],
-        "default-param-last": "off"
+        "default-param-last": "off",
+        "no-await-in-loop": "off"
     }
 }

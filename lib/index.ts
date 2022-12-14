@@ -6,6 +6,14 @@ import VolitileStore from './volatile-store';
 
 export interface Options {
   prefixes?: { [prefix: string]: string | NamedNode; };
+  /**
+   * When true mints prefixes for namespaces without a defined prefix
+   */
+  mintPrefixes?: boolean;
+  /**
+   * Custom fetch function to use for retrieving prefixes from prefix.cc
+   */
+  fetch?: typeof globalThis.fetch;
   errorOnUnused?: boolean;
 }
 
@@ -15,7 +23,8 @@ export interface Result {
 }
 
 export async function write(quads: Quad[], options?: Options): Promise<Result> {
-  return new Promise<Result>((resolve, reject) => {
+  // eslint-disable-next-line no-async-promise-executor
+  return new Promise<Result>(async (resolve, reject) => {
     try {
       let s = '';
       const volatileStore = new VolitileStore(quads);
@@ -53,8 +62,10 @@ export async function write(quads: Quad[], options?: Options): Promise<Result> {
         options?.prefixes,
         undefined,
         options?.errorOnUnused !== false,
+        options?.mintPrefixes,
+        options?.fetch,
       );
-      writer.write();
+      await writer.write();
     } catch (e) {
       reject(e);
     }
