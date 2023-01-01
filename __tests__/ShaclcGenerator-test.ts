@@ -114,6 +114,7 @@ describe('Running SHACLC test suite', () => {
       actual = actual.replace(/\n+/g, '\n');
       expected = expected.replace(/\n+/g, '\n');
       expected = expected.replace(/^\n$/g, '');
+      expected = expected.replace(/^$/g, '\n');
       expect(actual).toEqual(expected);
     });
   }

@@ -86,7 +86,7 @@ export default class SHACLCWriter {
       this.store.removeQuads(onotology);
 
       // Don't write default
-      if (!base.equals(new NamedNode('urn:x-base:default'))) this.writer.add(`BASE ${termToString(base)}`).newLine();
+      if (!base.equals(new NamedNode('urn:x-base:default'))) this.writer.add(`BASE ${termToString(base)}`);
 
       await this.writeImports(base);
     } else {
@@ -129,6 +129,8 @@ export default class SHACLCWriter {
     this.prefixes = { ...this.prefixes, ...knownPrefixes };
     this.prefixRev = { ...this.prefixRev, ...knownNamespaces };
 
+    this.writer.newLine();
+
     await this.writeShapes();
 
     if (this.extendedSyntax) {
@@ -163,10 +165,8 @@ export default class SHACLCWriter {
     const imports = this.store.getObjectsOnce(base, new NamedNode(owl.imports), null);
     if (imports.length > 0) {
       for (const imp of imports) {
-        this.writer.add(`IMPORTS <${imp.value}>`);
-        this.writer.newLine(1);
+        this.writer.add(`IMPORTS <${imp.value}>`, true);
       }
-      this.writer.newLine(1);
     }
   }
 
@@ -177,7 +177,6 @@ export default class SHACLCWriter {
       for (const key of keys) {
         this.writer.add(`PREFIX ${key}: <${this.prefixes[key]}>`, true);
       }
-      this.writer.newLine(1);
     }
   }
 
