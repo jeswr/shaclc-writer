@@ -7,7 +7,7 @@
  * written is also output.
  */
 import {
-  Term, Quad, Quad_Object, NamedNode,
+  Term, Quad, Quad_Object, NamedNode, DataFactory,
 } from 'n3';
 import { uriToPrefix } from '@jeswr/prefixcc';
 import type * as RDF from '@rdfjs/types';
@@ -60,6 +60,7 @@ export default class SHACLCWriter {
     private errorOnExtraQuads = true,
     private mintUnspecifiedPrefixes = false,
     private fetch?: typeof globalThis.fetch,
+    private extendedSyntax = false,
   ) {
     for (const key of Object.keys(prefixes)) {
       const iri = prefixes[key];
@@ -130,6 +131,20 @@ export default class SHACLCWriter {
 
     await this.writeShapes();
 
+    if (this.extendedSyntax) {
+      const subjects = this.store.getSubjects(null, null, null);
+
+      if (subjects.length > 0) {
+        this.writer.newLine();
+      }
+
+      for (const subject of subjects) {
+        this.writer.add(await this.termToString(subject, true, true));
+        this.writer.add(' ');
+        this.writeProperty(subject);
+      }
+    }
+
     if (this.errorOnExtraQuads && this.store.size > 0) {
       throw new Error('Dataset contains quads that cannot be written in SHACLC');
     }
@@ -160,7 +175,7 @@ export default class SHACLCWriter {
     }
   }
 
-  private async termToString(term: Term, disableShaclName = false) {
+  private async termToString(term: Term, disableShaclName = false, allowBlankNodes = false) {
     // TODO: Make sure this does not introduce any errors
     try {
       if (disableShaclName) {
@@ -186,6 +201,8 @@ export default class SHACLCWriter {
         return term.value;
       }
       return termToString(term);
+    } if (term.termType === 'BlankNode' && allowBlankNodes) {
+      termToString(term);
     }
     throw new Error(`Invalid term type for extra statement ${term.value} (${term.termType})`);
   }
@@ -560,9 +577,130 @@ export default class SHACLCWriter {
     //   this.writer.add(' //')
     // }
 
+    if (this.extendedSyntax && this.store.getQuads(property, null, null, null).length > 0) {
+      this.writer.add(' %');
+
+      this.writer.indent();
+      this.writer.newLine(1);
+      await this.writeTurtlePredicates(property);
+      this.writer.deindent();
+      // for (const predicate of this.store.getPredicates(property, null, null)) {
+      //   const objects = await Promise.all(
+      //     this.store.getObjectsOnce(property, predicate, null).map(object => this.termToString(object))
+      //   );
+      // }
+      this.writer.newLine(1);
+      this.writer.add('%');
+    }
+
     if (nestedShapes.length === 0) {
       this.writer.add(' .');
     }
+  }
+
+  private async writeTurtlePredicates(term: Term) {
+    const types = this.store.getObjectsOnce(term, DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), null);
+    let semi = types.length > 0;
+
+    if (types.length > 0) {
+      this.writer.add(' a ');
+      await this.writeTurtleObjects(types);
+    }
+
+    for (const predicate of this.store.getPredicates(term, null, null)) {
+      if (!predicate.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'))) {
+        if (semi) {
+          this.writer.add('; ');
+          this.writer.newLine(1);
+        } else {
+          semi = true;
+        }
+
+        this.writer.add(
+          await this.termToString(predicate, true),
+        );
+        this.writer.add(' ');
+        await this.writeTurtleObjects(
+          this.store.getObjectsOnce(term, predicate, null),
+        );
+      }
+    }
+  }
+
+  private async writeTurtleObjects(objects: Term[]) {
+    const blankObjects: Term[] = [];
+    const nonBlankObjects: Term[] = [];
+    for (const object of objects) {
+      if (object.termType === 'BlankNode' && [...this.store.match(null, null, object), ...this.store.match(null, object, null)].length === 0) {
+        blankObjects.push(object);
+      } else {
+        nonBlankObjects.push(object);
+      }
+    }
+
+    this.writer.add(
+      (await Promise.all(nonBlankObjects.map((object) => this.termToString(object, true, true)))).join(', '),
+    );
+
+    let comma = nonBlankObjects.length > 0;
+
+    if (blankObjects.length > 0) {
+      for (const blank of blankObjects) {
+        if (comma) {
+          this.writer.add(', ');
+        } else {
+          comma = true;
+        }
+        if (!(await this.writeList(blank))) {
+          this.writer.add('[');
+          this.writer.indent();
+          this.writer.newLine(1);
+          await this.writeTurtlePredicates(blank);
+          this.writer.deindent();
+          this.writer.newLine(1);
+          this.writer.add(']');
+        }
+      }
+    }
+  }
+
+  private async writeList(object: Term) {
+    let node = object;
+    const elems: Term[] = [];
+    const quads: Quad[] = [];
+
+    while (!node.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#nil'))) {
+      const first = this.store.getQuadsOnce(node, DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#first'), null, null);
+      const rest = this.store.getQuadsOnce(node, DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'), null, null);
+
+      quads.push(
+        ...first,
+        ...rest,
+      );
+
+      if (first.length !== 1 || rest.length !== 1 || this.store.getQuads(node, null, null, null).length !== 0) {
+        this.store.addQuads(quads);
+        return false;
+      }
+
+      elems.push(first[0].object);
+      node = rest[0].object;
+    }
+
+    let space = false;
+
+    this.writer.add('(');
+    for (const elem of elems) {
+      if (space) {
+        this.writer.add(' ');
+      } else {
+        space = true;
+      }
+      await this.writeTurtleObjects([elem]);
+    }
+    this.writer.add(')');
+
+    return true;
   }
 
   private async writePath(term: Term, braces: boolean = false) {
