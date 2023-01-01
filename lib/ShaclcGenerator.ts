@@ -147,6 +147,7 @@ export default class SHACLCWriter {
       }
       if (subjects.length > 0) {
         this.writer.add(' .');
+        this.writer.newLine();
       }
     }
 
