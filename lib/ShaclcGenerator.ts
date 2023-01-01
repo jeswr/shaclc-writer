@@ -135,13 +135,18 @@ export default class SHACLCWriter {
       const subjects = this.store.getSubjects(null, null, null);
 
       if (subjects.length > 0) {
-        this.writer.newLine();
+        this.writer.newLine(1);
       }
 
       for (const subject of subjects) {
         this.writer.add(await this.termToString(subject, true, true));
         this.writer.add(' ');
-        this.writeProperty(subject);
+        this.writer.indent();
+        await this.writeTurtlePredicates(subject);
+        this.writer.deindent();
+      }
+      if (subjects.length > 0) {
+        this.writer.add(' .');
       }
     }
 
@@ -235,6 +240,29 @@ export default class SHACLCWriter {
           this.writer.add(' ');
         }
       }
+
+      const unusedPredicates = this.store.getPredicates(subject, null, null)
+        .filter((property) => [
+          new NamedNode(sh.targetClass),
+          new NamedNode(sh.property),
+          // TODO: See if "and" should be here as well
+          new NamedNode(sh.or),
+          ...Object.keys(nodeParam).map((key) => new NamedNode(sh._ + key)),
+        ].every((elem) => !property.equals(elem)));
+
+      if (unusedPredicates.length > 0) {
+        this.writer.add(';');
+        this.writer.indent();
+        this.writer.newLine(1);
+      }
+
+      await this.writeGivenTurtlePredicates(subject, unusedPredicates);
+
+      if (unusedPredicates.length > 0) {
+        this.writer.add(' ');
+        this.writer.deindent();
+      }
+
       await this.writeShapeBody(subject, false);
     }
   }
@@ -437,10 +465,14 @@ export default class SHACLCWriter {
     }
   }
 
-  private async writeParams(term: Term, first = true, allowedParam: Record<string, boolean>, shortcuts = false) {
+  private async writeParams(term: Term, first = true, allowedParam: Record<string, boolean>, shortcuts = false, surroundings = false) {
     // TODO Stream this part
     const or = this.orProperties(term, allowedParam);
     const params = this.singleLayerPropertiesList(term, allowedParam);
+
+    if (surroundings && (or.length > 0 || params.length > 0)) {
+      this.writer.newLine(1);
+    }
 
     for (const statement of or) {
       if (first) {
@@ -453,23 +485,17 @@ export default class SHACLCWriter {
     }
 
     await this.writeAssigments(params, ' ', first, shortcuts);
+
+    if (surroundings && (or.length > 0 || params.length > 0)) {
+      this.writer.add(' .');
+    }
   }
 
   private async writeShapeBody(term: Term, nested = true) {
     this.writer.add('{').indent();
     const properties = this.store.getObjectsOnce(term, new NamedNode(sh.property), null);
 
-    const annotations = this.store.countQuads(term, null, null, null) > 0;
-
-    if (annotations) { // This is expensive - fix
-      this.writer.newLine(1);
-    }
-
-    await this.writeParams(term, true, nodeParam);
-
-    if (annotations) {
-      this.writer.add(' .');
-    }
+    await this.writeParams(term, true, nodeParam, false, true);
 
     for (const property of properties) {
       this.writer.newLine(1);
@@ -554,29 +580,6 @@ export default class SHACLCWriter {
       await this.writeShapeBody(shape);
     }
 
-    // TODO: Re-enable this
-    // let esc = false;
-
-    // for (const p of this.store.getQuads(property, null, null, null)) {
-    //   if (p.predicate.termType == 'NamedNode') {
-    //     if (!esc) {
-    //       this.writer.add(' // ')
-    //       esc = true;
-    //     }
-
-    //     await this.writeIriLiteralOrArray(p.predicate);
-    //     this.writer.add(' ');
-    //     await this.writeIriLiteralOrArray(p.object);
-    //     this.writer.add(' ');
-
-    //     this.store.removeQuad(p);
-    //   }
-    // }
-
-    // if (esc) {
-    //   this.writer.add(' //')
-    // }
-
     if (this.extendedSyntax && this.store.getQuads(property, null, null, null).length > 0) {
       this.writer.add(' %');
 
@@ -584,11 +587,6 @@ export default class SHACLCWriter {
       this.writer.newLine(1);
       await this.writeTurtlePredicates(property);
       this.writer.deindent();
-      // for (const predicate of this.store.getPredicates(property, null, null)) {
-      //   const objects = await Promise.all(
-      //     this.store.getObjectsOnce(property, predicate, null).map(object => this.termToString(object))
-      //   );
-      // }
       this.writer.newLine(1);
       this.writer.add('%');
     }
@@ -599,18 +597,25 @@ export default class SHACLCWriter {
   }
 
   private async writeTurtlePredicates(term: Term) {
-    const types = this.store.getObjectsOnce(term, DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), null);
-    let semi = types.length > 0;
+    return this.writeGivenTurtlePredicates(term, this.store.getPredicates(term, null, null));
+  }
 
-    if (types.length > 0) {
-      this.writer.add(' a ');
-      await this.writeTurtleObjects(types);
+  private async writeGivenTurtlePredicates(term: Term, predicates: Term[]) {
+    let semi = false;
+
+    if (predicates.some((predicate) => predicate.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')))) {
+      const types = this.store.getObjectsOnce(term, DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), null);
+      if (types.length > 0) {
+        semi = true;
+        this.writer.add(' a ');
+        await this.writeTurtleObjects(types);
+      }
     }
 
-    for (const predicate of this.store.getPredicates(term, null, null)) {
+    for (const predicate of predicates) {
       if (!predicate.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'))) {
         if (semi) {
-          this.writer.add('; ');
+          this.writer.add(' ;');
           this.writer.newLine(1);
         } else {
           semi = true;
