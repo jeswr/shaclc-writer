@@ -465,7 +465,13 @@ export default class SHACLCWriter {
     }
   }
 
-  private async writeParams(term: Term, first = true, allowedParam: Record<string, boolean>, shortcuts = false, surroundings = false) {
+  private async writeParams(
+    term: Term,
+    first = true,
+    allowedParam: Record<string, boolean>,
+    shortcuts = false,
+    surroundings = false,
+  ) {
     // TODO Stream this part
     const or = this.orProperties(term, allowedParam);
     const params = this.singleLayerPropertiesList(term, allowedParam);
@@ -603,8 +609,14 @@ export default class SHACLCWriter {
   private async writeGivenTurtlePredicates(term: Term, predicates: Term[]) {
     let semi = false;
 
-    if (predicates.some((predicate) => predicate.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')))) {
-      const types = this.store.getObjectsOnce(term, DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'), null);
+    if (predicates.some(
+      (predicate) => predicate.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')),
+    )) {
+      const types = this.store.getObjectsOnce(
+        term,
+        DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+        null,
+      );
       if (types.length > 0) {
         semi = true;
         this.writer.add(' a ');
@@ -636,7 +648,9 @@ export default class SHACLCWriter {
     const blankObjects: Term[] = [];
     const nonBlankObjects: Term[] = [];
     for (const object of objects) {
-      if (object.termType === 'BlankNode' && [...this.store.match(null, null, object), ...this.store.match(null, object, null)].length === 0) {
+      if (object.termType === 'BlankNode'
+      && [...this.store.match(null, null, object), ...this.store.match(null, object, null)].length === 0
+      ) {
         blankObjects.push(object);
       } else {
         nonBlankObjects.push(object);
@@ -675,8 +689,18 @@ export default class SHACLCWriter {
     const quads: Quad[] = [];
 
     while (!node.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#nil'))) {
-      const first = this.store.getQuadsOnce(node, DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#first'), null, null);
-      const rest = this.store.getQuadsOnce(node, DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'), null, null);
+      const first = this.store.getQuadsOnce(
+        node,
+        DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#first'),
+        null,
+        null,
+      );
+      const rest = this.store.getQuadsOnce(
+        node,
+        DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'),
+        null,
+        null,
+      );
 
       quads.push(
         ...first,

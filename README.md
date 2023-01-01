@@ -145,7 +145,6 @@ async function main() {
 main();
 ```
 
-
 ## Extended SHACL Compact Syntax
 
 The [SHACL Compact Syntax specification](https://w3c.github.io/shacl/shacl-compact-syntax/) is not expressive enough to
