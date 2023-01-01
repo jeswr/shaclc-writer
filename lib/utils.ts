@@ -1,6 +1,6 @@
 /**
-   * Get the frame of an IRI that we expect to be in the SHACL namespace
-   */
+  * Get the frame of an IRI that we expect to be in the SHACL namespace
+  */
 
 import { Term } from 'n3';
 import { sh } from './ontologies';
