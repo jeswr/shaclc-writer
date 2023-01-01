@@ -15,6 +15,7 @@ export interface Options {
    */
   fetch?: typeof globalThis.fetch;
   errorOnUnused?: boolean;
+  extendedSyntax?: boolean;
 }
 
 export interface Result {
@@ -64,6 +65,7 @@ export async function write(quads: Quad[], options?: Options): Promise<Result> {
         options?.errorOnUnused !== false,
         options?.mintPrefixes,
         options?.fetch,
+        options?.extendedSyntax,
       );
       await writer.write();
     } catch (e) {

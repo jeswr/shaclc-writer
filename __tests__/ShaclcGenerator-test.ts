@@ -327,3 +327,20 @@ describe('Testing each conformance file roundtrips', () => {
     );
   });
 });
+
+describe('Testing each extended conformance file roundtrips', () => {
+  it.each(
+    fs.readdirSync(path.join(__dirname, 'extended-all')).filter((str) => str.endsWith('.ttl')),
+  )('testing %s correctly parses', async (file) => {
+    const ttlString = fs.readFileSync(path.join(__dirname, 'extended-all', file)).toString();
+    const triples = (new N3.Parser()).parse(ttlString);
+
+    const { text } = await write(triples, { extendedSyntax: true, errorOnUnused: false, mintPrefixes: true });
+
+    expect(
+      parse(text, { extendedSyntax: true }),
+    ).toBeRdfIsomorphic(
+      (new N3.Parser()).parse(ttlString),
+    );
+  });
+});
