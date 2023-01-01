@@ -124,6 +124,22 @@ export default class SHACLCWriter {
       );
     }
 
+    const allNamespaces = new Set<string>([
+      ...this.store.getSubjects(null, null, null),
+      ...this.store.getPredicates(null, null, null),
+      ...this.store.getObjects(null, null, null),
+    ]
+      .filter((term) => term.termType === 'NamedNode')
+      .map((term) => getNamespace(term.value))
+      .filter((str): str is string => typeof str === 'string'));
+
+    for (const key in this.prefixRev) {
+      if (!allNamespaces.has(key)) {
+        delete this.prefixes[this.prefixRev[key]];
+        delete this.prefixRev[key];
+      }
+    }
+
     await this.writePrefixes();
 
     this.prefixes = { ...this.prefixes, ...knownPrefixes };

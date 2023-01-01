@@ -111,10 +111,15 @@ describe('Running SHACLC test suite', () => {
       );
       let actual = await getText(`${fullPath}.ttl`);
       // TODO: REMOVE THIS CLEANING
+      expected = expected.replace(
+        'PREFIX ex: <http://example.org/directives#>',
+        '',
+      );
       actual = actual.replace(/\n+/g, '\n');
       expected = expected.replace(/\n+/g, '\n');
       expected = expected.replace(/^\n$/g, '');
       expected = expected.replace(/^$/g, '\n');
+
       expect(actual).toEqual(expected);
     });
   }
