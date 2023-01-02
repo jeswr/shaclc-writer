@@ -348,5 +348,13 @@ describe('Testing each extended conformance file roundtrips', () => {
     ).toBeRdfIsomorphic(
       (new N3.Parser()).parse(ttlString),
     );
+
+    expect(
+      () => write(triples, { extendedSyntax: false, errorOnUnused: true, mintPrefixes: true }),
+    ).rejects.toThrowError();
+
+    expect(
+      () => write(triples, { errorOnUnused: true, mintPrefixes: true }),
+    ).rejects.toThrowError();
   });
 });

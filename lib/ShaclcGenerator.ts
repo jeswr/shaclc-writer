@@ -272,7 +272,9 @@ export default class SHACLCWriter {
         this.writer.newLine(1);
       }
 
-      await this.writeGivenTurtlePredicates(subject, unusedPredicates);
+      if (this.extendedSyntax) {
+        await this.writeGivenTurtlePredicates(subject, unusedPredicates);
+      }
 
       if (unusedPredicates.length > 0) {
         this.writer.add(' ');
