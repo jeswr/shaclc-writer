@@ -326,8 +326,12 @@ describe('Testing each conformance file roundtrips', () => {
     const ttlString = fs.readFileSync(path.join(__dirname, 'shaclc-test-suite', file)).toString();
     const triples = (new N3.Parser()).parse(ttlString);
 
+    const { text } = await write(triples);
+
+    expect(text).not.toContain('  ');
+
     expect(
-      parse((await write(triples)).text),
+      parse(text),
     ).toBeRdfIsomorphic(
       (new N3.Parser()).parse(ttlString),
     );
@@ -342,6 +346,8 @@ describe('Testing each extended conformance file roundtrips', () => {
     const triples = (new N3.Parser()).parse(ttlString);
 
     const { text } = await write(triples, { extendedSyntax: true, errorOnUnused: false, mintPrefixes: true });
+
+    expect(text).not.toContain('  ');
 
     expect(
       parse(text, { extendedSyntax: true }),

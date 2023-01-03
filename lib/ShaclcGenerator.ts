@@ -637,7 +637,7 @@ export default class SHACLCWriter {
       );
       if (types.length > 0) {
         semi = true;
-        this.writer.add(' a ');
+        this.writer.add('a ');
         await this.writeTurtleObjects(types);
       }
     }
