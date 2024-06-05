@@ -7,7 +7,7 @@
  * written is also output.
  */
 import {
-  Term, Quad, Quad_Object, NamedNode, DataFactory,
+  Term, Quad, Quad_Object, NamedNode, DataFactory, Writer as N3Writer,
 } from 'n3';
 import { uriToPrefix } from '@jeswr/prefixcc';
 import type * as RDF from '@rdfjs/types';
@@ -170,7 +170,9 @@ export default class SHACLCWriter {
     }
 
     if (this.errorOnExtraQuads && this.store.size > 0) {
-      throw new Error('Dataset contains quads that cannot be written in SHACLC');
+      throw new Error(`Dataset contains quads that cannot be written in SHACLC [\n${
+        new N3Writer({ prefixes: this.prefixes }).quadsToString(this.store.getQuads(null, null, null, null))
+      }]`);
     }
 
     this.writer.end();
