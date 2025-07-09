@@ -61,6 +61,7 @@ export default class SHACLCWriter {
     private mintUnspecifiedPrefixes = false,
     private fetch?: typeof globalThis.fetch,
     private extendedSyntax = false,
+    private readonly requireBase = true,
   ) {
     for (const key of Object.keys(prefixes)) {
       const iri = prefixes[key];
@@ -72,6 +73,7 @@ export default class SHACLCWriter {
       }
     }
     this.writer = writer;
+    this.requireBase = requireBase;
   }
 
   /**
@@ -89,7 +91,7 @@ export default class SHACLCWriter {
       if (!base.equals(new NamedNode('urn:x-base:default'))) this.writer.add(`BASE ${termToString(base)}`);
 
       await this.writeImports(base);
-    } else {
+    } else if (this.requireBase) {
       throw new Error('Base expected');
     }
 
