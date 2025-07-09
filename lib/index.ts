@@ -14,8 +14,22 @@ export interface Options {
    * Custom fetch function to use for retrieving prefixes from prefix.cc
    */
   fetch?: typeof globalThis.fetch;
+  /**
+   * When true, the generated SHACLC will error on unused triples
+   * If undefined, the default is true.
+   */
   errorOnUnused?: boolean;
+  /**
+   * When true, the generated SHACLC will use the extended syntax
+   * which enables escaping into turtle with `%`
+   */
   extendedSyntax?: boolean;
+  /**
+   * When true, the generated SHACLC will require a base URI to be set
+   * (e.g. with @base or BASE)
+   * If undefined, the default is true.
+   */
+  requireBase?: boolean;
 }
 
 export interface Result {
@@ -66,6 +80,7 @@ export async function write(quads: Quad[], options?: Options): Promise<Result> {
         options?.mintPrefixes,
         options?.fetch,
         options?.extendedSyntax,
+        options?.requireBase !== false,
       );
       await writer.write();
     } catch (e) {
