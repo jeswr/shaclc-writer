@@ -7,7 +7,7 @@
  * written is also output.
  */
 import {
-  Term, Quad, Quad_Object, NamedNode, DataFactory,
+  Term, Quad, Quad_Object, NamedNode, DataFactory, Writer as N3Writer,
 } from 'n3';
 import { uriToPrefix } from '@jeswr/prefixcc';
 import type * as RDF from '@rdfjs/types';
@@ -61,6 +61,7 @@ export default class SHACLCWriter {
     private mintUnspecifiedPrefixes = false,
     private fetch?: typeof globalThis.fetch,
     private extendedSyntax = false,
+    private readonly requireBase = true,
   ) {
     for (const key of Object.keys(prefixes)) {
       const iri = prefixes[key];
@@ -72,6 +73,7 @@ export default class SHACLCWriter {
       }
     }
     this.writer = writer;
+    this.requireBase = requireBase;
   }
 
   /**
@@ -89,7 +91,7 @@ export default class SHACLCWriter {
       if (!base.equals(new NamedNode('urn:x-base:default'))) this.writer.add(`BASE ${termToString(base)}`);
 
       await this.writeImports(base);
-    } else {
+    } else if (this.requireBase) {
       throw new Error('Base expected');
     }
 
@@ -170,7 +172,9 @@ export default class SHACLCWriter {
     }
 
     if (this.errorOnExtraQuads && this.store.size > 0) {
-      throw new Error('Dataset contains quads that cannot be written in SHACLC');
+      throw new Error(`Dataset contains quads that cannot be written in SHACLC [\n${
+        new N3Writer({ prefixes: this.prefixes }).quadsToString(this.store.getQuads(null, null, null, null))
+      }]`);
     }
 
     this.writer.end();

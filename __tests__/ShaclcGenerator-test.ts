@@ -18,7 +18,7 @@ import { write } from '../lib/index';
 
 const errorSuite: Record<string, string> = errorSuiteImport;
 
-async function transformText(file: string): Promise<string> {
+async function transformText(file: string, pth: string): Promise<string> {
   const parser = new Parser();
   const base = /@base <[^>]*(?=>)/ui.exec(file)?.[0]?.slice(7);
   const prefixes: Prefixes<RDF.NamedNode<string> | string> = await new Promise(
@@ -51,7 +51,17 @@ async function transformText(file: string): Promise<string> {
           resolve(s);
         },
       });
-      const writer = new SHACLCWriter(store, w, prefixes, base ? new NamedNode(base) : undefined);
+      const writer = new SHACLCWriter(
+        store,
+        w,
+        prefixes,
+        base ? new NamedNode(base) : undefined,
+        true, // error on unused
+        false, // mint prefixes
+        globalThis.fetch,
+        false, // extended syntax
+        !pth.includes('no-base'), // require base
+      );
       await writer.write();
     } catch (e) {
       reject(e);
@@ -61,7 +71,7 @@ async function transformText(file: string): Promise<string> {
 
 async function getText(pth: string) {
   const file = readFileSync(pth).toString();
-  return transformText(file);
+  return transformText(file, pth);
 }
 
 const basePath = path.join(__dirname, 'shaclc-test-suite');
@@ -345,14 +355,26 @@ describe('Testing each extended conformance file roundtrips', () => {
     const ttlString = fs.readFileSync(path.join(__dirname, 'extended-all', file)).toString();
     const triples = (new N3.Parser()).parse(ttlString);
 
-    const { text } = await write(triples, { extendedSyntax: true, errorOnUnused: false, mintPrefixes: true });
+    const { text } = await write(triples, {
+      extendedSyntax: true, errorOnUnused: false, mintPrefixes: true, requireBase: !file.includes('no-base'),
+    });
 
     expect(text).not.toContain('  ');
+
+    const result = (new N3.Parser()).parse(ttlString);
+
+    if (file.includes('no-base')) {
+      result.push(DataFactory.quad(
+        DataFactory.namedNode('urn:x-base:default'),
+        DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+        DataFactory.namedNode('http://www.w3.org/2002/07/owl#Ontology'),
+      ));
+    }
 
     expect(
       parse(text, { extendedSyntax: true }),
     ).toBeRdfIsomorphic(
-      (new N3.Parser()).parse(ttlString),
+      result,
     );
 
     expect(
