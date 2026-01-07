@@ -2,7 +2,7 @@
 import type * as RDF from '@rdfjs/types';
 import fs, { readFileSync } from 'fs';
 import {
-  DataFactory, NamedNode, Parser, Prefixes, Quad,
+  DataFactory, Parser, Prefixes,
 } from 'n3';
 import { parse } from 'shaclc-parse';
 import path from 'path';
@@ -34,7 +34,7 @@ async function transformText(file: string, pth: string): Promise<string> {
     },
   );
   if (prefixes.ex && typeof prefixes.ex === 'string') {
-    prefixes.ex = new NamedNode(prefixes.ex ?? 'http://example.org/test#');
+    prefixes.ex = DataFactory.namedNode(prefixes.ex ?? 'http://example.org/test#');
   }
   const fileQuads = parser.parse(file);
   const store = new MyStore();
@@ -55,7 +55,7 @@ async function transformText(file: string, pth: string): Promise<string> {
         store,
         w,
         prefixes,
-        base ? new NamedNode(base) : undefined,
+        base ? DataFactory.namedNode(base) : undefined,
         true, // error on unused
         false, // mint prefixes
         globalThis.fetch,
@@ -320,10 +320,10 @@ describe('index tests', () => {
 
     expect(typeof text).toEqual('string');
     expect(extraQuads).toEqual([
-      new Quad(
-        new NamedNode('http://example.org/test#Jesse'),
-        new NamedNode('http://example.org/test#knows'),
-        new NamedNode('http://example.org/test#Bob'),
+      DataFactory.quad(
+        DataFactory.namedNode('http://example.org/test#Jesse'),
+        DataFactory.namedNode('http://example.org/test#knows'),
+        DataFactory.namedNode('http://example.org/test#Bob'),
       ),
     ]);
   });

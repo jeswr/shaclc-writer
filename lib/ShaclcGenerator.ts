@@ -7,7 +7,7 @@
  * written is also output.
  */
 import {
-  Term, Quad, Quad_Object, NamedNode, DataFactory, Writer as N3Writer,
+  Term, Quad, Quad_Object, NamedNode, DataFactory as DF, Writer as N3Writer,
 } from 'n3';
 import { uriToPrefix } from '@jeswr/prefixcc';
 import type * as RDF from '@rdfjs/types';
@@ -88,7 +88,7 @@ export default class SHACLCWriter {
       this.store.removeQuads(onotology);
 
       // Don't write default
-      if (!base.equals(new NamedNode('urn:x-base:default'))) this.writer.add(`BASE ${termToString(base)}`);
+      if (!base.equals(DF.namedNode('urn:x-base:default'))) this.writer.add(`BASE ${termToString(base)}`);
 
       await this.writeImports(base);
     } else if (this.requireBase) {
@@ -182,7 +182,7 @@ export default class SHACLCWriter {
   }
 
   private async writeImports(base: NamedNode) {
-    const imports = this.store.getObjectsOnce(base, new NamedNode(owl.imports), null);
+    const imports = this.store.getObjectsOnce(base, DF.namedNode(owl.imports), null);
     if (imports.length > 0) {
       for (const imp of imports) {
         this.writer.add(`IMPORTS <${imp.value}>`, true);
@@ -237,15 +237,15 @@ export default class SHACLCWriter {
     /**
      * Get every nodeshape declared at the top level
      */
-    for (const subject of this.store.getSubjectsOnce(new NamedNode(rdf.type), new NamedNode(sh.NodeShape), null)) {
-      if (this.store.getQuadsOnce(subject, new NamedNode(rdf.type), new NamedNode(rdfs.Class), null).length > 0) {
+    for (const subject of this.store.getSubjectsOnce(DF.namedNode(rdf.type), DF.namedNode(sh.NodeShape), null)) {
+      if (this.store.getQuadsOnce(subject, DF.namedNode(rdf.type), DF.namedNode(rdfs.Class), null).length > 0) {
         this.writer.add('shapeClass ');
       } else {
         this.writer.add('shape ');
       }
       this.writer.add(await this.termToString(subject));
       this.writer.add(' ');
-      const targetClasses = this.store.getObjectsOnce(subject, new NamedNode(sh.targetClass), null);
+      const targetClasses = this.store.getObjectsOnce(subject, DF.namedNode(sh.targetClass), null);
       if (targetClasses.length > 0) {
         this.writer.add('-> ');
         for (const targetClass of targetClasses) {
@@ -254,7 +254,7 @@ export default class SHACLCWriter {
           } else {
             this.writer.add('!');
             this.writer.add(await this.termToString(
-              this.singleObject(targetClass, new NamedNode(sh.not), true),
+              this.singleObject(targetClass, DF.namedNode(sh.not), true),
             ));
           }
           this.writer.add(' ');
@@ -263,11 +263,11 @@ export default class SHACLCWriter {
 
       const unusedPredicates = this.store.getPredicates(subject, null, null)
         .filter((property) => [
-          new NamedNode(sh.targetClass),
-          new NamedNode(sh.property),
+          DF.namedNode(sh.targetClass),
+          DF.namedNode(sh.property),
           // TODO: See if "and" should be here as well
-          new NamedNode(sh.or),
-          ...Object.keys(nodeParam).map((key) => new NamedNode(sh._ + key)),
+          DF.namedNode(sh.or),
+          ...Object.keys(nodeParam).map((key) => DF.namedNode(sh._ + key)),
         ].every((elem) => !property.equals(elem)));
 
       if (unusedPredicates.length > 0) {
@@ -367,9 +367,9 @@ export default class SHACLCWriter {
     let termTemp: Term = term;
     const list: Term[] = [];
     // TODO: Handle poorly formed RDF lists
-    while (!termTemp.equals(new NamedNode(rdf.nil))) {
-      list.push(this.singleObject(termTemp, new NamedNode(rdf.first), true));
-      termTemp = this.singleObject(termTemp, new NamedNode(rdf.rest), true);
+    while (!termTemp.equals(DF.namedNode(rdf.nil))) {
+      list.push(this.singleObject(termTemp, DF.namedNode(rdf.first), true));
+      termTemp = this.singleObject(termTemp, DF.namedNode(rdf.rest), true);
     }
     return list;
   }
@@ -521,7 +521,7 @@ export default class SHACLCWriter {
 
   private async writeShapeBody(term: Term, nested = true) {
     this.writer.add('{').indent();
-    const properties = this.store.getObjectsOnce(term, new NamedNode(sh.property), null);
+    const properties = this.store.getObjectsOnce(term, DF.namedNode(sh.property), null);
 
     await this.writeParams(term, true, nodeParam, false, true);
 
@@ -540,14 +540,14 @@ export default class SHACLCWriter {
   }
 
   private async writeProperty(property: Term) {
-    await this.writePath(this.singleObject(property, new NamedNode(sh.path), true) as Term);
-    const min = this.singleObject(property, new NamedNode(sh.minCount));
-    const max = this.singleObject(property, new NamedNode(sh.maxCount));
-    const nodeKind = this.singleObject(property, new NamedNode(sh.nodeKind));
+    await this.writePath(this.singleObject(property, DF.namedNode(sh.path), true) as Term);
+    const min = this.singleObject(property, DF.namedNode(sh.minCount));
+    const max = this.singleObject(property, DF.namedNode(sh.maxCount));
+    const nodeKind = this.singleObject(property, DF.namedNode(sh.nodeKind));
     // eslint-disable-next-line no-underscore-dangle
-    const propertyClass = this.singleObject(property, new NamedNode(sh._class));
-    const datatype = this.singleObject(property, new NamedNode(sh.datatype));
-    const nodeShapes = this.store.getObjectsOnce(property, new NamedNode(sh.node), null);
+    const propertyClass = this.singleObject(property, DF.namedNode(sh._class));
+    const datatype = this.singleObject(property, DF.namedNode(sh.datatype));
+    const nodeShapes = this.store.getObjectsOnce(property, DF.namedNode(sh.node), null);
 
     if (nodeKind) {
       this.writer.add(' ');
@@ -580,7 +580,7 @@ export default class SHACLCWriter {
         if (max.termType !== 'Literal' || max.datatypeString !== 'http://www.w3.org/2001/XMLSchema#integer') {
           throw new Error('Invalid max value, must me an integer literal');
         }
-        this.store.removeMatches(property, new NamedNode(sh.maxCount), undefined, undefined);
+        this.store.removeMatches(property, DF.namedNode(sh.maxCount), undefined, undefined);
         this.writer.add(max.value);
       } else {
         this.writer.add('*');
@@ -632,11 +632,11 @@ export default class SHACLCWriter {
     let semi = false;
 
     if (predicates.some(
-      (predicate) => predicate.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')),
+      (predicate) => predicate.equals(DF.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type')),
     )) {
       const types = this.store.getObjectsOnce(
         term,
-        DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+        DF.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
         null,
       );
       if (types.length > 0) {
@@ -647,7 +647,7 @@ export default class SHACLCWriter {
     }
 
     for (const predicate of predicates) {
-      if (!predicate.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'))) {
+      if (!predicate.equals(DF.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'))) {
         if (semi) {
           this.writer.add(' ;');
           this.writer.newLine(1);
@@ -710,16 +710,16 @@ export default class SHACLCWriter {
     const elems: Term[] = [];
     const quads: Quad[] = [];
 
-    while (!node.equals(DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#nil'))) {
+    while (!node.equals(DF.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#nil'))) {
       const first = this.store.getQuadsOnce(
         node,
-        DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#first'),
+        DF.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#first'),
         null,
         null,
       );
       const rest = this.store.getQuadsOnce(
         node,
-        DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'),
+        DF.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#rest'),
         null,
         null,
       );
