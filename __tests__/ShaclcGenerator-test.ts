@@ -143,7 +143,7 @@ describe('error tests', () => {
       await expect(getText(path.join(__dirname, 'error-suite', `${file}.ttl`)))
         // TODO: Re-enable tests for error contexts with input
         //  errorSuite[file]
-        .rejects.toThrowError();
+        .rejects.toThrow();
     });
   }
 });
@@ -234,7 +234,7 @@ describe('index tests', () => {
       },
     });
 
-    expect(promise).rejects.toThrowError();
+    expect(promise).rejects.toThrow();
   });
 
   it('should error on all quads in non-default graph', async () => {
@@ -255,7 +255,7 @@ describe('index tests', () => {
       },
     });
 
-    expect(promise).rejects.toThrowError();
+    expect(promise).rejects.toThrow();
   });
 
   it('should error on one quad in non-default graph', async () => {
@@ -279,7 +279,7 @@ describe('index tests', () => {
       },
     });
 
-    expect(promise).rejects.toThrowError();
+    expect(promise).rejects.toThrow();
   });
 
   it('should error on all quads in different graphs', async () => {
@@ -303,7 +303,7 @@ describe('index tests', () => {
       },
     });
 
-    expect(promise).rejects.toThrowError();
+    expect(promise).rejects.toThrow();
   });
 
   it('should produce on extra quads', async () => {
@@ -379,10 +379,10 @@ describe('Testing each extended conformance file roundtrips', () => {
 
     expect(
       () => write(triples, { extendedSyntax: false, errorOnUnused: true, mintPrefixes: true }),
-    ).rejects.toThrowError();
+    ).rejects.toThrow();
 
     expect(
       () => write(triples, { errorOnUnused: true, mintPrefixes: true }),
-    ).rejects.toThrowError();
+    ).rejects.toThrow();
   });
 });
