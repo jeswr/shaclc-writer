@@ -47,7 +47,7 @@
     "jest-rdf": "^2.0.0",
     "pre-commit": "^1.0.10",
     "semantic-release": "^25.0.2",
-    "shaclc-parse": "^1.4.3",
+    "shaclc-parse": "^2.0.0",
     "ts-jest": "^29.4.6",
     "typescript": "^5.9.3"
   },
