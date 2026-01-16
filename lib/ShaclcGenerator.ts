@@ -18,7 +18,7 @@ import {
 import Store from './volatile-store';
 import Writer from './writer';
 import { getShaclName } from './utils';
-import propertyParam from './property-param ';
+import propertyParam from './property-param';
 import basePrefixes from './base-prefixes';
 import nodeParam from './node-param';
 
