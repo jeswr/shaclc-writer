@@ -223,6 +223,59 @@ describe('index tests', () => {
     expect(text).toContain('<http://example.org/test#Instance1>');
   });
 
+  it('should error when there is no base and requireBase is not disabled', async () => {
+    const quads = (new Parser()).parse(`
+@prefix ex: <http://example.org/test#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+ex:TestShape
+  a sh:NodeShape ;
+  sh:property [
+    sh:path ex:property ;
+    sh:minCount 1 ;
+  ] ;
+.
+`);
+
+    await expect(write(quads, {
+      prefixes: { ex: 'http://example.org/test#' },
+    })).rejects.toThrow('Base expected');
+  });
+
+  it('should write documents without a BASE keyword when requireBase is disabled', async () => {
+    const inputQuads = (new Parser()).parse(`
+@prefix ex: <http://example.org/test#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+ex:TestShape
+  a sh:NodeShape ;
+  sh:property [
+    sh:path ex:property ;
+    sh:minCount 1 ;
+  ] ;
+.
+`);
+
+    const { text, extraQuads } = await write(inputQuads, {
+      prefixes: { ex: 'http://example.org/test#' },
+      requireBase: false,
+    });
+
+    expect(text).not.toContain('BASE');
+    expect(extraQuads).toBeUndefined();
+
+    // Parsing a document without a BASE keyword adds the default base
+    // as the ontology subject
+    expect(parse(text)).toBeRdfIsomorphic([
+      ...inputQuads,
+      DataFactory.quad(
+        DataFactory.namedNode('urn:x-base:default'),
+        DataFactory.namedNode('http://www.w3.org/1999/02/22-rdf-syntax-ns#type'),
+        DataFactory.namedNode('http://www.w3.org/2002/07/owl#Ontology'),
+      ),
+    ]);
+  });
+
   it('should error on extra quads', async () => {
     const quads = (new Parser()).parse(`${ttl}\nex:Jesse ex:knows ex:Bob .`);
 

@@ -145,6 +145,48 @@ async function main() {
 main();
 ```
 
+## Writing without a BASE declaration
+
+By default an error is thrown if the quads do not contain an `owl:Ontology` subject to use as the base URI. To write documents without a `BASE` declaration, disable the `requireBase` option.
+
+```ts
+import { Parser } from 'n3';
+import { write } from 'shaclc-write';
+
+const ttl = `
+@prefix ex: <http://example.org/test#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+ex:TestShape
+	a sh:NodeShape ;
+	sh:property [
+		sh:path ex:property ;
+		sh:minCount 1 ;
+	] ;
+.
+`
+
+async function main() {
+  const quads = (new Parser()).parse(ttl);
+
+  const { text } = await write(quads, {
+    prefixes: { ex: "http://example.org/test#" },
+    requireBase: false,
+  });
+
+  // PREFIX ex: <http://example.org/test#>
+  //
+  // shape ex:TestShape {
+  // 	ex:property [1..*] .
+  // }
+  console.log(text)
+}
+
+main();
+```
+
+An `owl:Ontology` subject of `<urn:x-base:default>` is also written without a `BASE` declaration; this is the placeholder that [shaclc-parse](https://github.com/jeswr/shaclcjs) uses when parsing a document that has no `BASE` keyword.
+
 ## Extended SHACL Compact Syntax
 
 The [SHACL Compact Syntax specification](https://w3c.github.io/shacl/shacl-compact-syntax/) is not expressive enough to

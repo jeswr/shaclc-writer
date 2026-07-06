@@ -1,6 +1,6 @@
 {
   "literal-path": "Path should be named node or blank node",
-  "no-base": "",
+  "missing-base": "Base expected",
   "string-min": "Invalid min value, must me an integer literal",
   "float-min": "Invalid min value, must me an integer literal",
   "string-max": "Invalid max value, must me an integer literal",
