@@ -171,9 +171,10 @@ export default class SHACLCWriter {
       }
     }
 
-    if (this.errorOnExtraQuads && this.store.size > 0) {
+    const extraQuads = this.store.getQuads(null, null, null, null);
+    if (this.errorOnExtraQuads && extraQuads.length > 0) {
       throw new Error(`Dataset contains quads that cannot be written in SHACLC [\n${
-        new N3Writer({ prefixes: this.prefixes }).quadsToString(this.store.getQuads(null, null, null, null))
+        new N3Writer({ prefixes: this.prefixes }).quadsToString(extraQuads)
       }]`);
     }
 
@@ -580,7 +581,7 @@ export default class SHACLCWriter {
         if (max.termType !== 'Literal' || max.datatypeString !== 'http://www.w3.org/2001/XMLSchema#integer') {
           throw new Error('Invalid max value, must me an integer literal');
         }
-        this.store.removeMatches(property, DF.namedNode(sh.maxCount), undefined, undefined);
+        this.store.getQuadsOnce(property, DF.namedNode(sh.maxCount), null, null);
         this.writer.add(max.value);
       } else {
         this.writer.add('*');
@@ -671,7 +672,8 @@ export default class SHACLCWriter {
     const nonBlankObjects: Term[] = [];
     for (const object of objects) {
       if (object.termType === 'BlankNode'
-      && [...this.store.match(null, null, object), ...this.store.match(null, object, null)].length === 0
+      && this.store.getQuads(null, null, object, null).length === 0
+      && this.store.getQuads(null, object, null, null).length === 0
       ) {
         blankObjects.push(object);
       } else {
