@@ -1,0 +1,15 @@
+@prefix ex: <http://example.org/test#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+
+<http://example.org/multiple-statements>
+	a owl:Ontology ;
+.
+
+ex:TestShape
+	a sh:NodeShape ;
+.
+
+ex:Alice ex:knows ex:Bob .
+
+ex:Bob ex:knows ex:Alice .

@@ -1,0 +1,8 @@
+BASE <http://example.org/multiple-statements>
+PREFIX ex: <http://example.org/test#>
+
+shape ex:TestShape {
+}
+
+ex:Alice ex:knows ex:Bob .
+ex:Bob ex:knows ex:Alice .

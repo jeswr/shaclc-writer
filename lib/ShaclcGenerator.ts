@@ -164,10 +164,10 @@ export default class SHACLCWriter {
         this.writer.indent();
         await this.writeTurtlePredicates(subject);
         this.writer.deindent();
-      }
-      if (subjects.length > 0) {
+        // Terminate each top-level statement so that consecutive subjects
+        // are not concatenated into a single malformed statement
         this.writer.add(' .');
-        this.writer.newLine();
+        this.writer.newLine(1);
       }
     }
 
