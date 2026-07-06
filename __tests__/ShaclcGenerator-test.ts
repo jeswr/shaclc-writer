@@ -329,6 +329,106 @@ describe('index tests', () => {
   });
 });
 
+describe('extended syntax blank node handling', () => {
+  const bnodeTtlBase = `
+@prefix ex: <http://example.org/test#> .
+@prefix sh: <http://www.w3.org/ns/shacl#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+<http://example.org/base> a owl:Ontology .
+ex:TestShape a sh:NodeShape .
+`;
+
+  const bnodeOptions = {
+    extendedSyntax: true,
+    errorOnUnused: false,
+    prefixes: { ex: 'http://example.org/test#' },
+  };
+
+  it('should return statements about blank nodes referenced more than once as extraQuads', async () => {
+    const quads = (new Parser()).parse(`${bnodeTtlBase}
+ex:a ex:knows _:shared .
+ex:b ex:knows _:shared .
+_:shared ex:name "shared" .
+`);
+
+    const { text, extraQuads } = await write(quads, bnodeOptions);
+
+    expect(extraQuads ?? []).toHaveLength(3);
+    expect([
+      ...parse(text, { extendedSyntax: true }),
+      ...(extraQuads ?? []),
+    ]).toBeRdfIsomorphic(quads);
+  });
+
+  it('should error on blank nodes referenced more than once when errorOnUnused is not disabled', async () => {
+    const quads = (new Parser()).parse(`${bnodeTtlBase}
+ex:a ex:knows _:shared .
+ex:b ex:knows _:shared .
+_:shared ex:name "shared" .
+`);
+
+    await expect(write(quads, { ...bnodeOptions, errorOnUnused: true })).rejects.toThrow();
+  });
+
+  it('should return statements about unreferenced blank node subjects as extraQuads', async () => {
+    const quads = (new Parser()).parse(`${bnodeTtlBase}
+_:standalone ex:name "standalone" .
+`);
+
+    const { text, extraQuads } = await write(quads, bnodeOptions);
+
+    expect(extraQuads ?? []).toHaveLength(1);
+    expect([
+      ...parse(text, { extendedSyntax: true }),
+      ...(extraQuads ?? []),
+    ]).toBeRdfIsomorphic(quads);
+  });
+
+  it('should return blank node cycles as extraQuads', async () => {
+    const quads = (new Parser()).parse(`${bnodeTtlBase}
+_:b ex:knows _:c .
+_:c ex:knows _:b .
+`);
+
+    const { text, extraQuads } = await write(quads, bnodeOptions);
+
+    expect(extraQuads ?? []).toHaveLength(2);
+    expect([
+      ...parse(text, { extendedSyntax: true }),
+      ...(extraQuads ?? []),
+    ]).toBeRdfIsomorphic(quads);
+  });
+
+  it('should still write statements with writable objects when others are set aside', async () => {
+    const quads = (new Parser()).parse(`${bnodeTtlBase}
+ex:a ex:p _:x .
+ex:b ex:q _:x .
+ex:a ex:name "alice" .
+`);
+
+    const { text, extraQuads } = await write(quads, bnodeOptions);
+
+    expect(extraQuads ?? []).toHaveLength(2);
+    expect(text).toContain('ex:a ex:name "alice" .');
+  });
+
+  it('should inline blank nodes that are referenced exactly once', async () => {
+    const quads = (new Parser()).parse(`${bnodeTtlBase}
+ex:a ex:address _:x .
+_:x ex:city "Berlin" .
+_:x ex:geo _:g .
+_:g ex:lat 1 .
+`);
+
+    const { text, extraQuads } = await write(quads, bnodeOptions);
+
+    expect(extraQuads).toBeUndefined();
+    expect(text).toContain('ex:a ex:address [');
+    expect(text).toContain('ex:city "Berlin"');
+    expect(text).toContain('ex:geo [');
+  });
+});
+
 describe('Testing each conformance file roundtrips', () => {
   it.each(
     fs.readdirSync(path.join(__dirname, 'shaclc-test-suite')).filter((str) => str.endsWith('.ttl')),
