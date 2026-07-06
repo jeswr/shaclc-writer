@@ -152,7 +152,13 @@ export default class SHACLCWriter {
     await this.writeShapes();
 
     if (this.extendedSyntax) {
-      const subjects = this.store.getSubjects(null, null, null);
+      const unwritableQuads = this.removeUnwritableBlankNodeQuads();
+
+      // Blank nodes can only be written by inlining them as the object of
+      // exactly one statement, so top level statements are only written for
+      // named subjects
+      const subjects = this.store.getSubjects(null, null, null)
+        .filter((subject) => subject.termType === 'NamedNode');
 
       if (subjects.length > 0) {
         this.writer.newLine(1);
@@ -169,6 +175,10 @@ export default class SHACLCWriter {
         this.writer.add(' .');
         this.writer.newLine(1);
       }
+
+      // Return the unwritable quads to the store so that they are reported
+      // as quads that could not be serialized
+      this.store.addQuads(unwritableQuads);
     }
 
     if (this.errorOnExtraQuads && this.store.size > 0) {
@@ -179,6 +189,69 @@ export default class SHACLCWriter {
 
     this.writer.end();
     // this.failedQuads.append(this.store.getQuads(null, null, null, null))
+  }
+
+  /**
+   * SHACLC has no syntax for blank node labels, so a blank node can only be
+   * written by inlining it as the object of exactly one other statement.
+   * This removes and returns the quads of blank nodes that cannot be written
+   * this way - blank nodes used as the object of more than one statement, and
+   * blank node subjects that are not referenced anywhere - so that they can
+   * be reported as quads that could not be serialized rather than producing
+   * malformed output.
+   */
+  private removeUnwritableBlankNodeQuads(): Quad[] {
+    const references = new Map<string, Quad[]>();
+    for (const quad of this.store.getQuads(null, null, null, null)) {
+      if (quad.object.termType === 'BlankNode') {
+        const refs = references.get(quad.object.value);
+        if (refs) {
+          refs.push(quad);
+        } else {
+          references.set(quad.object.value, [quad]);
+        }
+      }
+    }
+
+    const queue: string[] = [];
+    const unwritable = new Set<string>();
+    const markUnwritable = (value: string) => {
+      if (!unwritable.has(value)) {
+        unwritable.add(value);
+        queue.push(value);
+      }
+    };
+
+    for (const subject of this.store.getSubjects(null, null, null)) {
+      if (subject.termType === 'BlankNode' && !references.has(subject.value)) {
+        markUnwritable(subject.value);
+      }
+    }
+    for (const [value, refs] of references) {
+      if (refs.length > 1) {
+        markUnwritable(value);
+      }
+    }
+
+    const removed: Quad[] = [];
+    while (queue.length > 0) {
+      const value = queue.pop() as string;
+      // Statements referencing the blank node cannot be written
+      for (const quad of references.get(value) ?? []) {
+        removed.push(quad);
+      }
+      // Statements about the blank node cannot be written either, and blank
+      // nodes whose only reference is in such a statement become unwritable
+      for (const quad of this.store.getQuads(DF.blankNode(value), null, null, null)) {
+        removed.push(quad);
+        if (quad.object.termType === 'BlankNode' && references.get(quad.object.value)?.length === 1) {
+          markUnwritable(quad.object.value);
+        }
+      }
+    }
+
+    this.store.removeQuads(removed);
+    return removed;
   }
 
   private async writeImports(base: NamedNode) {
@@ -227,7 +300,10 @@ export default class SHACLCWriter {
       }
       return termToString(term);
     } if (term.termType === 'BlankNode' && allowBlankNodes) {
-      termToString(term);
+      // SHACLC has no syntax for blank node labels, so a blank node that
+      // still needs one at this point cannot be serialized
+      throw new Error(`Cannot write blank node ${term.value}: `
+        + 'SHACLC has no syntax for blank nodes that are referenced more than once');
     }
     throw new Error(`Invalid term type for extra statement ${term.value} (${term.termType})`);
   }
